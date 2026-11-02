@@ -1,4 +1,4 @@
-import { normalizeAppLink } from '@gallery/shared'
+import { galleryStartParam, normalizeAppLink, parseGalleryStart } from '@gallery/shared'
 
 interface Insets {
   top: number
@@ -136,7 +136,8 @@ function shareLink(param: string, text: string): 'telegram' | 'copied' {
 
 export const sharePhoto = (photoId: string, text: string) => shareLink(`photo_${photoId}`, text)
 
-export const shareGallery = (token: string, text: string) => shareLink(`g_${token}`, text)
+/** With an album the link opens straight at it, still inside the owner's read-only gallery. */
+export const shareGallery = (token: string, text: string, albumId?: string) => shareLink(galleryStartParam(token, albumId), text)
 
 const startParam = () => app?.initDataUnsafe.start_param ?? new URLSearchParams(location.search).get('startapp') ?? ''
 
@@ -145,9 +146,6 @@ export function startPhotoId() {
   return param.startsWith('photo_') ? param.slice('photo_'.length) : null
 }
 
-export function startGalleryToken() {
-  const param = startParam()
-  return param.startsWith('g_') ? param.slice('g_'.length) : null
-}
+export const startGallery = () => parseGalleryStart(startParam())
 
 export const userLanguage = () => tg?.initDataUnsafe.user?.language_code ?? navigator.language.slice(0, 2)

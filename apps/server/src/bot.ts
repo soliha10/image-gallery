@@ -1,16 +1,18 @@
 import { autoRetry } from '@grammyjs/auto-retry'
 import { and, count, desc, eq, ilike, or, sql } from 'drizzle-orm'
-import { Bot, InlineKeyboard, type Context } from 'grammy'
+import { Bot, InlineKeyboard, type Api, type Context } from 'grammy'
 import type { InlineQueryResultPhoto, Message } from 'grammy/types'
-import { BOT_LANGUAGES, botText, html } from './botText'
+import { galleryStartParam, type Language } from '@gallery/shared'
+import { BOT_LANGUAGES, botText, html, LANGUAGE_BUTTONS } from './botText'
 import type { Db } from './db'
 import { albums, photos } from './db/schema'
 import { appLinkBase, env } from './env'
 import { packId, unpackId } from './lib/compactId'
 import { UnsupportedImageError } from './lib/image'
 import { MediaGroupCollector } from './lib/mediaGroup'
-import { addPhoto, deletePhoto, mediaBase, ownedPhoto, QuotaExceededError, setPhotoAlbum, type PhotoRow } from './lib/photos'
+import { addPhoto, deletePhoto, mediaBase, ownedPhoto, ownsAlbum, QuotaExceededError, setPhotoAlbum, type PhotoRow } from './lib/photos'
 import { Semaphore } from './lib/semaphore'
+import { resolveLanguage, saveLanguage } from './lib/settings'
 import { findShare, getOrCreateShare, revokeShare } from './lib/shares'
 
 const MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024
@@ -40,15 +42,22 @@ function splitCaption(caption = '') {
   return { title: first.trim().slice(0, 120), description: rest.join('\n').trim().slice(0, 1000) }
 }
 
+/** Every update carries the sender's language: their saved choice, else Telegram's. */
+export type BotContext = Context & { lang?: string }
+
 const escapeLike = (value: string) => value.replace(/[\\%_]/g, '\\$&')
 
 /** Links straight into the Mini App, optionally at a start parameter. */
 const appLink = (param?: string) => (appLinkBase ? (param ? `${appLinkBase}?startapp=${param}` : appLinkBase) : null)
 
 export function createBot(token: string, db: Db) {
-  const bot = new Bot(token)
+  const bot = new Bot<BotContext>(token)
   // Telegram answers bursts with 429 and a wait time; retrying keeps album replies from being lost.
   bot.api.config.use(autoRetry({ maxRetryAttempts: 3, maxDelaySeconds: 10 }))
+  bot.use(async (ctx, next) => {
+    if (ctx.from) ctx.lang = await resolveLanguage(db, ctx.from)
+    await next()
+  })
   const processing = new Semaphore(PROCESSING_SLOTS)
   // Galleries are personal, so the bot only works in one-to-one chats; groups are ignored.
   const chat = bot.chatType('private')
@@ -90,6 +99,24 @@ export function createBot(token: string, db: Db) {
     return env.MINI_APP_URL ? new InlineKeyboard().webApp(label, env.MINI_APP_URL) : undefined
   }
 
+  /** A finished album is ready to show off, so sharing it is offered right away. */
+  const albumKeyboard = (albumId: string, language?: string) => {
+    const keyboard = openKeyboard(language) ?? new InlineKeyboard()
+    return appLinkBase ? keyboard.row().text(botText(language).shareAlbum, `sa:${packId(albumId)}`) : keyboard
+  }
+
+  const languageRow = (keyboard: InlineKeyboard) => {
+    keyboard.row()
+    for (const { code, label } of LANGUAGE_BUTTONS) keyboard.text(label, `lang:${code}`)
+    return keyboard
+  }
+
+  const shareKeyboard = (link: string, language?: string) => {
+    const text = botText(language)
+    const forward = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text.shareText)}`
+    return new InlineKeyboard().url(text.shareButton, forward).row().text(text.revoke, 'rv')
+  }
+
   /** Buttons under a saved photo: open it, send it on, file it, or delete it. */
   const photoKeyboard = (photo: PhotoRow, language: string | undefined, inline: boolean) => {
     const text = botText(language)
@@ -107,7 +134,8 @@ export function createBot(token: string, db: Db) {
       const chatId = items[0]!.message.chat.id
       const sender = items[0]!.message.from!
       const owner = sender.id
-      const text = botText(sender.language_code)
+      const language = await resolveLanguage(db, sender)
+      const text = botText(language)
       const progress = await bot.api.sendMessage(chatId, text.saving(items.length))
       const captioned = items.find(({ message }) => message.caption)
       const title = splitCaption(captioned?.message.caption).title || text.newAlbum
@@ -123,48 +151,50 @@ export function createBot(token: string, db: Db) {
       const saved = results.filter((r) => r.status === 'fulfilled').length
       const failure = results.find((r): r is PromiseRejectedResult => r.status === 'rejected')
       if (saved === 0) await db.delete(albums).where(eq(albums.id, album!.id))
-      const note = failure ? `\n${failureText(failure.reason, sender.language_code)}` : ''
+      const note = failure ? `\n${failureText(failure.reason, language)}` : ''
       const summary = saved > 0 ? text.albumAdded(title, saved) : ''
       await bot.api.editMessageText(chatId, progress.message_id, `${summary}${note}`.trim(), {
         parse_mode: 'HTML',
-        reply_markup: saved > 0 ? openKeyboard(sender.language_code) : undefined,
+        reply_markup: saved > 0 ? albumKeyboard(album!.id, language) : undefined,
       })
     })().catch((error) => console.error('album import failed', error))
   })
 
   chat.command('start', async (ctx) => {
-    const language = ctx.from.language_code
-    const text = botText(language)
-    // The menu button is set per chat, so each person sees it in their own language.
-    if (env.MINI_APP_URL) {
-      await ctx.api
-        .setChatMenuButton({ chat_id: ctx.chat.id, menu_button: { type: 'web_app', text: text.menu, web_app: { url: env.MINI_APP_URL } } })
-        .catch((error) => console.error('menu button not set', error))
-    }
-    await ctx.reply(text.welcome, { reply_markup: openKeyboard(language) })
+    const language = ctx.lang
+    await applyChatLanguage(ctx.api, ctx.chat.id, language)
+    await ctx.reply(botText(language).welcome, { reply_markup: languageRow(openKeyboard(language) ?? new InlineKeyboard()) })
+  })
+
+  chat.command('language', (ctx) =>
+    ctx.reply(botText(ctx.lang).chooseLanguage, { reply_markup: languageRow(new InlineKeyboard()) }),
+  )
+
+  bot.callbackQuery(/^lang:(uz|ru|en)$/, async (ctx) => {
+    const language = ctx.match[1] as Language
+    await saveLanguage(db, ctx.from.id, language)
+    if (ctx.chat) await applyChatLanguage(ctx.api, ctx.chat.id, language)
+    await ctx.editMessageText(botText(language).languageSet, { reply_markup: openKeyboard(language) })
+    await ctx.answerCallbackQuery()
   })
 
   chat.command('help', (ctx) =>
-    ctx.reply(botText(ctx.from.language_code).help(ctx.me.supports_inline_queries).replace('{bot}', ctx.me.username), {
+    ctx.reply(botText(ctx.lang).help(ctx.me.supports_inline_queries).replace('{bot}', ctx.me.username), {
       parse_mode: 'HTML',
     }),
   )
 
   chat.command('gallery', (ctx) => {
-    const language = ctx.from.language_code
+    const language = ctx.lang
     return ctx.reply(botText(language).open, { reply_markup: openKeyboard(language) })
   })
 
   chat.command('share', async (ctx) => {
-    const text = botText(ctx.from.language_code)
+    const text = botText(ctx.lang)
     if (!appLinkBase) return ctx.reply(text.noAppLink)
     const token = await getOrCreateShare(db, ctx.from.id, ctx.from.first_name)
-    const link = appLink(`g_${token}`)!
-    const forward = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text.shareText)}`
-    return ctx.reply(text.shareLink(link), {
-      link_preview_options: { is_disabled: true },
-      reply_markup: new InlineKeyboard().url(text.shareButton, forward).row().text(text.revoke, 'rv'),
-    })
+    const link = appLink(galleryStartParam(token))!
+    return ctx.reply(text.shareLink(link), { link_preview_options: { is_disabled: true }, reply_markup: shareKeyboard(link, ctx.lang) })
   })
 
   chat.command('stats', async (ctx) => {
@@ -174,14 +204,14 @@ export function createBot(token: string, db: Db) {
       db.select({ total: count() }).from(albums).where(eq(albums.ownerId, owner)),
       findShare(db, owner),
     ])
-    const text = botText(ctx.from.language_code)
+    const text = botText(ctx.lang)
     return ctx.reply(text.stats(photoCount?.total ?? 0, env.MAX_PHOTOS_PER_USER, albumCount?.total ?? 0, token !== null))
   })
 
-  const onImage = async (ctx: Context) => {
+  const onImage = async (ctx: BotContext) => {
     const message = ctx.message
     if (!message || !ctx.from) return
-    const language = ctx.from.language_code
+    const language = ctx.lang
     const text = botText(language)
     const file = imageFile(message)
     if (!file) return
@@ -209,11 +239,11 @@ export function createBot(token: string, db: Db) {
   chat.on(['message:photo', 'message:document'], onImage)
 
   /** Callback buttons act on the presser's own photo only; anything else reads as "not found". */
-  const pressedPhoto = async (ctx: Context, packed: string) => {
+  const pressedPhoto = async (ctx: BotContext, packed: string) => {
     const id = unpackId(packed)
     const photo = id ? await ownedPhoto(db, ctx.from!.id, id) : null
     if (!photo) {
-      await ctx.answerCallbackQuery({ text: botText(ctx.from?.language_code).notFound, show_alert: true })
+      await ctx.answerCallbackQuery({ text: botText(ctx.lang).notFound, show_alert: true })
       await ctx.editMessageReplyMarkup().catch(() => undefined)
     }
     return photo
@@ -222,7 +252,7 @@ export function createBot(token: string, db: Db) {
   bot.callbackQuery(/^al:([\w-]{22})$/, async (ctx) => {
     const photo = await pressedPhoto(ctx, ctx.match[1]!)
     if (!photo) return
-    const text = botText(ctx.from.language_code)
+    const text = botText(ctx.lang)
     const owned = await db
       .select({ id: albums.id, title: albums.title })
       .from(albums)
@@ -244,14 +274,14 @@ export function createBot(token: string, db: Db) {
   bot.callbackQuery(/^mv:([\w-]{22}):([\w-]{22}|-)$/, async (ctx) => {
     const photo = await pressedPhoto(ctx, ctx.match[1]!)
     if (!photo) return
-    const text = botText(ctx.from.language_code)
+    const text = botText(ctx.lang)
     const albumId = ctx.match[2] === '-' ? null : unpackId(ctx.match[2]!)
     const moved = await setPhotoAlbum(db, ctx.from.id, photo.id, albumId)
     if (!moved) return ctx.answerCallbackQuery({ text: text.notFound, show_alert: true })
     const [album] = albumId ? await db.select({ title: albums.title }).from(albums).where(eq(albums.id, albumId)) : []
     await ctx.editMessageText(album ? text.moved(album.title) : text.unfiled, {
       parse_mode: 'HTML',
-      reply_markup: photoKeyboard(moved, ctx.from.language_code, ctx.me.supports_inline_queries),
+      reply_markup: photoKeyboard(moved, ctx.lang, ctx.me.supports_inline_queries),
     })
     await ctx.answerCallbackQuery()
   })
@@ -259,7 +289,7 @@ export function createBot(token: string, db: Db) {
   bot.callbackQuery(/^rm:([\w-]{22})$/, async (ctx) => {
     const photo = await pressedPhoto(ctx, ctx.match[1]!)
     if (!photo) return
-    const text = botText(ctx.from.language_code)
+    const text = botText(ctx.lang)
     const id = packId(photo.id)
     await ctx.editMessageReplyMarkup({
       reply_markup: new InlineKeyboard().text(text.confirmYes, `rmy:${id}`).text(text.cancel, `bk:${id}`),
@@ -271,7 +301,7 @@ export function createBot(token: string, db: Db) {
     const photo = await pressedPhoto(ctx, ctx.match[1]!)
     if (!photo) return
     await deletePhoto(db, ctx.from.id, photo.id)
-    const text = botText(ctx.from.language_code)
+    const text = botText(ctx.lang)
     await ctx.editMessageText(text.deleted)
     await ctx.answerCallbackQuery()
   })
@@ -279,13 +309,29 @@ export function createBot(token: string, db: Db) {
   bot.callbackQuery(/^bk:([\w-]{22})$/, async (ctx) => {
     const photo = await pressedPhoto(ctx, ctx.match[1]!)
     if (!photo) return
-    await ctx.editMessageReplyMarkup({ reply_markup: photoKeyboard(photo, ctx.from.language_code, ctx.me.supports_inline_queries) })
+    await ctx.editMessageReplyMarkup({ reply_markup: photoKeyboard(photo, ctx.lang, ctx.me.supports_inline_queries) })
+    await ctx.answerCallbackQuery()
+  })
+
+  bot.callbackQuery(/^sa:([\w-]{22})$/, async (ctx) => {
+    const text = botText(ctx.lang)
+    const albumId = unpackId(ctx.match[1]!)
+    if (!albumId || !appLinkBase || !(await ownsAlbum(db, ctx.from.id, albumId))) {
+      return ctx.answerCallbackQuery({ text: text.notFound, show_alert: true })
+    }
+    const [album] = await db.select({ title: albums.title }).from(albums).where(eq(albums.id, albumId))
+    const token = await getOrCreateShare(db, ctx.from.id, ctx.from.first_name)
+    const link = appLink(galleryStartParam(token, albumId))!
+    await ctx.reply(text.albumShareLink(album!.title, link), {
+      link_preview_options: { is_disabled: true },
+      reply_markup: shareKeyboard(link, ctx.lang),
+    })
     await ctx.answerCallbackQuery()
   })
 
   bot.callbackQuery('rv', async (ctx) => {
     await revokeShare(db, ctx.from.id)
-    await ctx.editMessageText(botText(ctx.from.language_code).revoked)
+    await ctx.editMessageText(botText(ctx.lang).revoked)
     await ctx.answerCallbackQuery()
   })
 
@@ -319,7 +365,7 @@ export function createBot(token: string, db: Db) {
       cache_time: 10,
       is_personal: true,
       next_offset: rows.length === INLINE_PAGE ? String(offset + INLINE_PAGE) : '',
-      button: empty ? { text: botText(ctx.from.language_code).inlineEmpty, start_parameter: 'inline' } : undefined,
+      button: empty ? { text: botText(ctx.lang).inlineEmpty, start_parameter: 'inline' } : undefined,
     })
   })
 
@@ -327,11 +373,25 @@ export function createBot(token: string, db: Db) {
   return bot
 }
 
+const commandMenu = (language: keyof typeof BOT_LANGUAGES) =>
+  Object.entries(BOT_LANGUAGES[language].commands).map(([command, description]) => ({ command, description }))
+
 /** Publishes the command menu in all three languages; Uzbek is the default for everyone else. */
-export async function configureBot(bot: Bot) {
-  const menu = (language: keyof typeof BOT_LANGUAGES) =>
-    Object.entries(BOT_LANGUAGES[language].commands).map(([command, description]) => ({ command, description }))
-  await bot.api.setMyCommands(menu('uz'))
-  await bot.api.setMyCommands(menu('ru'), { language_code: 'ru' })
-  await bot.api.setMyCommands(menu('en'), { language_code: 'en' })
+export async function configureBot(bot: Bot<BotContext>) {
+  await bot.api.setMyCommands(commandMenu('uz'))
+  await bot.api.setMyCommands(commandMenu('ru'), { language_code: 'ru' })
+  await bot.api.setMyCommands(commandMenu('en'), { language_code: 'en' })
+}
+
+/** A chosen language also renames this chat's command menu and its Mini App button. */
+async function applyChatLanguage(api: Api, chatId: number, language?: string) {
+  const code: keyof typeof BOT_LANGUAGES = language === 'ru' || language === 'en' ? language : 'uz'
+  await api
+    .setMyCommands(commandMenu(code), { scope: { type: 'chat', chat_id: chatId } })
+    .catch((error) => console.error('chat commands not set', error))
+  if (env.MINI_APP_URL) {
+    await api
+      .setChatMenuButton({ chat_id: chatId, menu_button: { type: 'web_app', text: botText(code).menu, web_app: { url: env.MINI_APP_URL } } })
+      .catch((error) => console.error('menu button not set', error))
+  }
 }

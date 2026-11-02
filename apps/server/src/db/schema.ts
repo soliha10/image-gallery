@@ -57,3 +57,10 @@ export const shares = pgTable('shares', {
   ownerName: text().notNull().default(''),
   createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
 })
+
+/** Per-user preferences that the bot and the app share. */
+export const userSettings = pgTable('user_settings', {
+  userId: bigint({ mode: 'number' }).primaryKey(),
+  language: text(),
+  updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+})

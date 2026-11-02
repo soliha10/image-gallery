@@ -3,7 +3,7 @@ export const html = (value: string) => value.replace(/&/g, '&amp;').replace(/</g
 
 const uz = {
   welcome:
-    'Xush kelibsiz! Bu sizning shaxsiy galereyangiz: menga rasm yuboring, mushukcha uni yulduzlar orasiga ilib qo‘yadi.\n\nBuyruqlar uchun /help ni bosing.',
+    'Xush kelibsiz! Bu sizning shaxsiy galereyangiz: menga rasm yuboring, mushukcha uni yulduzlar orasiga ilib qo‘yadi.\n\nBuyruqlar uchun /help ni bosing. Tilni pastdan tanlashingiz mumkin.',
   help: (inline: boolean) =>
     [
       '<b>Mushuk Galereyasi</b> — rasmlaringiz uchun shaxsiy koinot.',
@@ -12,6 +12,7 @@ const uz = {
       '📁 <b>Albom:</b> bir nechta rasmni birga yuboring, izoh albom nomi bo‘ladi. Yoki rasm ostidagi «Albomga» tugmasini bosing.',
       '🔗 /share — galereyangiz havolasi. Uni olgan odam faqat ko‘ra oladi.',
       '📊 /stats — galereyangiz holati.',
+      '🌐 /language — tilni tanlash.',
       '🔭 /gallery — galereyani ochish.',
       ...(inline ? ['', '💬 Istalgan chatda <code>@{bot}</code> deb yozing va rasmingizni tanlab yuboring.'] : []),
     ].join('\n'),
@@ -50,10 +51,16 @@ const uz = {
   stats: (photos: number, limit: number, albums: number, shared: boolean) =>
     `📊 Galereyangiz\n\nRasmlar: ${photos} / ${limit}\nAlbomlar: ${albums}\nUlashish havolasi: ${shared ? 'yoqilgan' : 'yo‘q'}`,
   inlineEmpty: 'Galereyangiz bo‘sh — botga rasm yuboring',
+  chooseLanguage: 'Tilni tanlang:',
+  languageSet: 'Til o‘zgartirildi: o‘zbekcha. Galereya ham shu tilda ochiladi.',
+  shareAlbum: '🔗 Albomni ulashish',
+  albumShareLink: (title: string, link: string) =>
+    `🔗 «${html(title)}» albomi havolasi:\n${link}\n\nUni olgan odam albomni va galereyangizni faqat ko‘ra oladi.`,
   commands: {
     gallery: 'Galereyani ochish',
     share: 'Galereya havolasi',
     stats: 'Galereya holati',
+    language: 'Tilni tanlash',
     help: 'Yordam',
   },
 }
@@ -62,7 +69,7 @@ type BotText = typeof uz
 
 const ru: BotText = {
   welcome:
-    'Добро пожаловать! Это ваша личная галерея: присылайте мне фото, и котёнок развесит их среди звёзд.\n\nКоманды — в /help.',
+    'Добро пожаловать! Это ваша личная галерея: присылайте мне фото, и котёнок развесит их среди звёзд.\n\nКоманды — в /help. Язык можно выбрать ниже.',
   help: (inline) =>
     [
       '<b>Кошачья галерея</b> — личный космос для ваших фото.',
@@ -71,6 +78,7 @@ const ru: BotText = {
       '📁 <b>Альбом:</b> отправьте несколько фото сразу, подпись станет названием. Или нажмите «В альбом» под фото.',
       '🔗 /share — ссылка на вашу галерею. По ней её можно только смотреть.',
       '📊 /stats — состояние галереи.',
+      '🌐 /language — выбрать язык.',
       '🔭 /gallery — открыть галерею.',
       ...(inline ? ['', '💬 В любом чате напишите <code>@{bot}</code> и выберите фото.'] : []),
     ].join('\n'),
@@ -109,17 +117,23 @@ const ru: BotText = {
   stats: (photos, limit, albums, shared) =>
     `📊 Ваша галерея\n\nФото: ${photos} / ${limit}\nАльбомы: ${albums}\nСсылка: ${shared ? 'включена' : 'нет'}`,
   inlineEmpty: 'Галерея пуста — пришлите боту фото',
+  chooseLanguage: 'Выберите язык:',
+  languageSet: 'Язык изменён: русский. Галерея тоже откроется на нём.',
+  shareAlbum: '🔗 Поделиться альбомом',
+  albumShareLink: (title, link) =>
+    `🔗 Ссылка на альбом «${html(title)}»:\n${link}\n\nПо ней альбом и галерею можно только смотреть.`,
   commands: {
     gallery: 'Открыть галерею',
     share: 'Ссылка на галерею',
     stats: 'Состояние галереи',
+    language: 'Выбрать язык',
     help: 'Помощь',
   },
 }
 
 const en: BotText = {
   welcome:
-    'Welcome! This is your own gallery: send me photos and the kitten will hang them among the stars.\n\nSee /help for commands.',
+    'Welcome! This is your own gallery: send me photos and the kitten will hang them among the stars.\n\nSee /help for commands. You can pick a language below.',
   help: (inline) =>
     [
       '<b>Cat Gallery</b> — your own cosmos for photos.',
@@ -128,6 +142,7 @@ const en: BotText = {
       '📁 <b>Album:</b> send several photos at once; the caption names the album. Or tap “To album” under a photo.',
       '🔗 /share — a link to your gallery. Anyone with it can only look.',
       '📊 /stats — your gallery at a glance.',
+      '🌐 /language — choose a language.',
       '🔭 /gallery — open the gallery.',
       ...(inline ? ['', '💬 In any chat, type <code>@{bot}</code> and pick a photo to send.'] : []),
     ].join('\n'),
@@ -166,15 +181,28 @@ const en: BotText = {
   stats: (photos, limit, albums, shared) =>
     `📊 Your gallery\n\nPhotos: ${photos} / ${limit}\nAlbums: ${albums}\nShare link: ${shared ? 'on' : 'off'}`,
   inlineEmpty: 'Your gallery is empty — send the bot a photo',
+  chooseLanguage: 'Choose a language:',
+  languageSet: 'Language changed to English. The gallery opens in it too.',
+  shareAlbum: '🔗 Share album',
+  albumShareLink: (title, link) =>
+    `🔗 Link to the “${html(title)}” album:\n${link}\n\nAnyone with it can view the album and your gallery, but not change them.`,
   commands: {
     gallery: 'Open the gallery',
     share: 'Gallery link',
     stats: 'Gallery stats',
+    language: 'Choose language',
     help: 'Help',
   },
 }
 
 export const BOT_LANGUAGES = { uz, ru, en } as const
+
+/** Shown on the language buttons in each language's own name. */
+export const LANGUAGE_BUTTONS = [
+  { code: 'uz', label: '🇺🇿 O‘zbekcha' },
+  { code: 'ru', label: '🇷🇺 Русский' },
+  { code: 'en', label: '🇬🇧 English' },
+] as const
 
 /** Replies follow the sender's Telegram language; anything other than Russian or English gets Uzbek. */
 export const botText = (language?: string): BotText => (language === 'ru' ? ru : language === 'en' ? en : uz)

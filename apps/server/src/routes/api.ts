@@ -1,6 +1,7 @@
 import {
   albumInputSchema,
   albumQuerySchema,
+  languageSchema,
   albumReorderSchema,
   photoPatchSchema,
   photoQuerySchema,
@@ -20,6 +21,7 @@ import { albums, favorites, photos, shares } from '../db/schema'
 import { env } from '../env'
 import { UnsupportedImageError } from '../lib/image'
 import { addPhoto, deletePhoto, listAlbums, ownsAlbum, QuotaExceededError, toPhoto } from '../lib/photos'
+import { saveLanguage, savedLanguage } from '../lib/settings'
 import { findShare, getOrCreateShare, revokeShare } from '../lib/shares'
 
 const idParams = z.object({ id: z.uuid() })
@@ -41,9 +43,10 @@ export async function apiRoutes(app: FastifyInstance, { db }: { db: Db }) {
   }
 
   app.get('/me', async ({ tgUser }): Promise<Me> => {
-    const [rows, owned] = await Promise.all([
+    const [rows, owned, language] = await Promise.all([
       db.select({ photoId: favorites.photoId }).from(favorites).where(eq(favorites.userId, tgUser.id)),
       db.select({ total: count() }).from(photos).where(eq(photos.ownerId, tgUser.id)),
+      savedLanguage(db, tgUser.id),
     ])
     return {
       id: tgUser.id,
@@ -52,7 +55,15 @@ export async function apiRoutes(app: FastifyInstance, { db }: { db: Db }) {
       favoriteIds: rows.map((r) => r.photoId),
       photoCount: owned[0]?.total ?? 0,
       photoLimit: env.MAX_PHOTOS_PER_USER,
+      language,
     }
+  })
+
+  // The same choice drives the bot's replies, so switching in either place switches both.
+  app.put('/language', async (request, reply) => {
+    const { language } = languageSchema.parse(request.body)
+    await saveLanguage(db, request.tgUser.id, language)
+    return reply.code(204).send()
   })
 
   app.get('/albums', async (request, reply) => {

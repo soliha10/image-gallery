@@ -170,3 +170,22 @@ describe('shared gallery links', () => {
     expect((await app.inject({ url: '/api/galleries/short', headers: as(BOB) })).statusCode).toBe(400)
   })
 })
+
+describe('language preference', () => {
+  it('starts unset, then follows the choice made in the app or the bot', async () => {
+    expect((await app.inject({ url: '/api/me', headers: as(BOB) })).json().language).toBeNull()
+    expect((await app.inject({ method: 'PUT', url: '/api/language', headers: as(BOB), payload: { language: 'ru' } })).statusCode).toBe(204)
+    expect((await app.inject({ url: '/api/me', headers: as(BOB) })).json().language).toBe('ru')
+    expect((await app.inject({ method: 'PUT', url: '/api/language', headers: as(BOB), payload: { language: 'de' } })).statusCode).toBe(400)
+  })
+})
+
+describe('shared album links', () => {
+  it('opens the owner’s album through the gallery link and nothing of anyone else', async () => {
+    const token = (await app.inject({ method: 'POST', url: '/api/share', headers: as(ALICE) })).json().token
+    const [album] = (await app.inject({ url: `/api/albums?gallery=${token}`, headers: as(BOB) })).json()
+    const inAlbum = await app.inject({ url: `/api/photos?gallery=${token}&album=${album.id}`, headers: as(BOB) })
+    expect(inAlbum.statusCode).toBe(200)
+    expect(inAlbum.json().items.every((p: { albumId: string }) => p.albumId === album.id)).toBe(true)
+  })
+})

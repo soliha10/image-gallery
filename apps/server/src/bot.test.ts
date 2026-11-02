@@ -151,7 +151,7 @@ describe('commands', () => {
     await configureBot(bot)
     const menus = sent('setMyCommands')
     expect(menus.map((m) => m.payload.language_code)).toEqual([undefined, 'ru', 'en'])
-    expect((menus[0]!.payload.commands as { command: string }[]).map((c) => c.command)).toEqual(['gallery', 'share', 'stats', 'help'])
+    expect((menus[0]!.payload.commands as { command: string }[]).map((c) => c.command)).toEqual(['gallery', 'share', 'stats', 'language', 'help'])
   })
 
   it('stays silent in group chats', async () => {
@@ -265,3 +265,52 @@ describe('inline mode', () => {
 
 const eqId = (id: string) => eq(schema.photos.id, id)
 const eqTitle = (title: string) => eq(schema.albums.title, title)
+
+describe('language choice', () => {
+  it('offers the three languages on /start and /language', async () => {
+    await command(ALICE, '/language')
+    expect(buttons(sent('sendMessage')[0]).map((b) => b.callback_data)).toEqual(['lang:uz', 'lang:ru', 'lang:en'])
+    await command(ALICE, '/start')
+    expect(buttons(sent('sendMessage')[1]).map((b) => b.callback_data).filter(Boolean)).toEqual(['lang:uz', 'lang:ru', 'lang:en'])
+  })
+
+  it('remembers the choice over Telegram’s language and renames this chat’s menus', async () => {
+    await press(ALICE, 'lang:ru')
+    expect(sent('editMessageText')[0]!.payload.text).toMatch(/Язык изменён/)
+    const scoped = sent('setMyCommands').find((call) => (call.payload.scope as { type?: string })?.type === 'chat')!
+    expect(scoped.payload.scope).toEqual({ type: 'chat', chat_id: ALICE.id })
+    expect((scoped.payload.commands as { description: string }[])[0]!.description).toBe('Открыть галерею')
+    expect(sent('setChatMenuButton')[0]!.payload).toMatchObject({ menu_button: { text: 'Галерея' } })
+    calls = []
+    await command(ALICE, '/stats')
+    expect(sent('sendMessage')[0]!.payload.text).toMatch(/Ваша галерея/)
+    await press(ALICE, 'lang:en')
+  })
+})
+
+describe('sharing a finished album', () => {
+  it('offers to share the album as soon as it is saved, with a link that opens at it', async () => {
+    await photo(ALICE, { media_group_id: 'g2', caption: 'Holiday' })
+    await photo(ALICE, { media_group_id: 'g2' })
+    await new Promise((resolve) => setTimeout(resolve, 3500))
+    const shareButton = buttons(sent('editMessageText').at(-1)).find((b) => b.callback_data?.startsWith('sa:'))!
+    expect(shareButton.text).toBe('🔗 Share album')
+    calls = []
+    await press(ALICE, shareButton.callback_data!)
+    const reply = sent('sendMessage')[0]!
+    expect(reply.payload.text).toMatch(/“Holiday” album/)
+    const param = String(reply.payload.text).match(/startapp=(g_[\w-]+)/)![1]!
+    const { parseGalleryStart } = await import('@gallery/shared')
+    const parsed = parseGalleryStart(param)!
+    const [holiday] = await db.select().from(schema.albums).where(eqTitle('Holiday'))
+    expect(parsed.albumId).toBe(holiday!.id)
+  }, 15_000)
+
+  it('will not share someone else’s album', async () => {
+    const [holiday] = await db.select().from(schema.albums).where(eqTitle('Holiday'))
+    const { packId } = await import('@gallery/shared')
+    await press(BOB, `sa:${packId(holiday!.id)}`)
+    expect(sent('answerCallbackQuery')[0]!.payload.show_alert).toBe(true)
+    expect(sent('sendMessage')).toEqual([])
+  })
+})

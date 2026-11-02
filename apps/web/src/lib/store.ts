@@ -2,7 +2,7 @@ import type { Album, Me, Photo } from '@gallery/shared'
 import { create } from 'zustand'
 import { api, ApiError, type PhotoFilter } from './api'
 import { language, setLanguage, type Language } from './i18n'
-import { startGalleryToken } from './telegram'
+import { startGallery } from './telegram'
 
 export interface Rect {
   left: number
@@ -72,7 +72,7 @@ const hasWebgl = () => {
 }
 
 /** The share link is followed once; leaving the shared gallery must not reopen it. */
-let pendingGallery = startGalleryToken()
+let pendingGallery = startGallery()
 
 export const useStore = create<State>((set, get) => ({
   status: 'loading',
@@ -95,6 +95,8 @@ export const useStore = create<State>((set, get) => ({
   setLanguage(next) {
     setLanguage(next)
     set({ language: next })
+    // Saved on the server too, so the bot answers in the same language.
+    void api.setLanguage(next).catch(() => undefined)
   },
 
   async leaveGallery() {
@@ -108,15 +110,20 @@ export const useStore = create<State>((set, get) => ({
     set({ status: 'loading' })
     try {
       if (pendingGallery) {
-        const token = pendingGallery
+        const { token, albumId } = pendingGallery
         pendingGallery = null
         const shared = await api.gallery(token).catch(() => null)
         // A revoked or mistyped link falls back to the viewer's own gallery, with a word about why.
-        if (shared) set({ visiting: { token, ownerName: shared.ownerName }, filter: {} })
+        if (shared) set({ visiting: { token, ownerName: shared.ownerName }, filter: albumId ? { album: albumId } : {} })
         else set({ notice: 'linkExpired' })
       }
       const gallery = get().visiting?.token
       const [me, albums, page] = await Promise.all([api.me(), api.albums(gallery), api.photos(get().filter, 0, gallery)])
+      // A language chosen in the bot (or on another device) wins over this device's default.
+      if (me.language && me.language !== get().language) {
+        setLanguage(me.language)
+        set({ language: me.language })
+      }
       set({
         me,
         albums,

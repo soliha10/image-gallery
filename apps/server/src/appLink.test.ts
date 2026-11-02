@@ -61,3 +61,20 @@ describe('webhook secret', () => {
     expect((await import('./env')).webhookSecret).toBe('plain_secret-123')
   })
 })
+
+describe('gallery start parameter', () => {
+  it('round-trips a gallery link with and without an album, within Telegram’s 64 characters', async () => {
+    const { galleryStartParam, parseGalleryStart } = await import('@gallery/shared')
+    const token = 'Rz82yi70k1CVqB75fX4-fw'
+    const album = '0f8fad5b-d9cb-469f-a165-70867728950e'
+    expect(parseGalleryStart(galleryStartParam(token))).toEqual({ token, albumId: null })
+    const withAlbum = galleryStartParam(token, album)
+    expect(withAlbum.length).toBeLessThanOrEqual(64)
+    expect(parseGalleryStart(withAlbum)).toEqual({ token, albumId: album })
+  })
+
+  it('ignores anything that is not a gallery link', async () => {
+    const { parseGalleryStart } = await import('@gallery/shared')
+    for (const param of ['', 'photo_abc', 'g_short', `g_${'a'.repeat(30)}`, `g_${'!'.repeat(22)}`]) expect(parseGalleryStart(param)).toBeNull()
+  })
+})

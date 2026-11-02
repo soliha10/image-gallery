@@ -38,6 +38,8 @@ export interface Me {
   favoriteIds: string[]
   photoCount: number
   photoLimit: number
+  /** Chosen in the bot or the app; null means follow Telegram's language. */
+  language: 'uz' | 'ru' | 'en' | null
 }
 
 /** Base64url, as Telegram only allows these characters in a startapp parameter. */
@@ -94,3 +96,49 @@ export function normalizeAppLink(value: string | undefined | null): string | nul
     return null
   }
 }
+
+const BASE64URL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+
+/**
+ * Packs a UUID into 22 base64url characters. Telegram allows only 64 characters in callback data
+ * and in a startapp parameter, too few for UUIDs written out. Pure JS, so it runs in the browser too.
+ */
+export function packId(uuid: string) {
+  const hex = uuid.replace(/-/g, '')
+  let bits = ''
+  for (let i = 0; i < hex.length; i++) bits += parseInt(hex[i]!, 16).toString(2).padStart(4, '0')
+  bits = bits.padEnd(132, '0')
+  let out = ''
+  for (let i = 0; i < 132; i += 6) out += BASE64URL[parseInt(bits.slice(i, i + 6), 2)]
+  return out
+}
+
+export function unpackId(packed: string): string | null {
+  if (!/^[A-Za-z0-9_-]{22}$/.test(packed)) return null
+  let bits = ''
+  for (const char of packed) bits += BASE64URL.indexOf(char).toString(2).padStart(6, '0')
+  if (/1/.test(bits.slice(128))) return null
+  let hex = ''
+  for (let i = 0; i < 128; i += 4) hex += parseInt(bits.slice(i, i + 4), 2).toString(16)
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
+
+const SHARE_TOKEN_LENGTH = 22
+
+/** Start parameter for a shared gallery, optionally opening straight at one of its albums. */
+export const galleryStartParam = (token: string, albumId?: string | null) => `g_${token}${albumId ? packId(albumId) : ''}`
+
+export function parseGalleryStart(param: string): { token: string; albumId: string | null } | null {
+  if (!param.startsWith('g_')) return null
+  const body = param.slice(2)
+  // Tokens are always 22 characters, so an album id, when present, is exactly what follows.
+  if (body.length === SHARE_TOKEN_LENGTH) return shareTokenSchema.safeParse(body).success ? { token: body, albumId: null } : null
+  if (body.length !== SHARE_TOKEN_LENGTH * 2) return null
+  const token = body.slice(0, SHARE_TOKEN_LENGTH)
+  const albumId = unpackId(body.slice(SHARE_TOKEN_LENGTH))
+  return albumId && shareTokenSchema.safeParse(token).success ? { token, albumId } : null
+}
+
+export const LANGUAGES = ['uz', 'ru', 'en'] as const
+export type Language = (typeof LANGUAGES)[number]
+export const languageSchema = z.object({ language: z.enum(LANGUAGES) })

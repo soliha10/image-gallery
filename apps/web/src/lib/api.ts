@@ -1,4 +1,4 @@
-import type { Album, Me, Photo, PhotoPage, Share, SharedGallery } from '@gallery/shared'
+import type { Album, Language, Me, Photo, PhotoPage, Share, SharedGallery } from '@gallery/shared'
 import { tg } from './telegram'
 
 export class ApiError extends Error {
@@ -41,6 +41,7 @@ export const api = {
   share: () => request<Share>('/share'),
   createShare: () => request<Share>('/share', { method: 'POST' }),
   revokeShare: () => request<void>('/share', { method: 'DELETE' }),
+  setLanguage: (language: Language) => request<void>('/language', json('PUT', { language })),
   favorite: (id: string, on: boolean) => request<void>(`/photos/${id}/favorite`, { method: on ? 'PUT' : 'DELETE' }),
   upload(file: File, albumId?: string) {
     const body = new FormData()

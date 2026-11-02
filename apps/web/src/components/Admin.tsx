@@ -98,11 +98,11 @@ export function Admin() {
     void api.share().then(({ token }) => setShareToken(token)).catch(() => undefined)
   }, [])
 
-  const share = async () => {
+  const share = async (albumId?: string) => {
     const { token } = await api.createShare()
     setShareToken(token!)
     haptic.tap()
-    if (shareGallery(token!, t.shareGalleryText) === 'copied') setNotice('linkCopied')
+    if (shareGallery(token!, t.shareGalleryText, albumId) === 'copied') setNotice('linkCopied')
   }
 
   const revoke = async () => {
@@ -217,6 +217,9 @@ export function Admin() {
               className="h-11 min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none focus:underline"
             />
             <span className="shrink-0 text-xs text-hint">{album.photoCount}</span>
+            <button onClick={() => void share(album.id)} aria-label={`${t.shareAlbum}: ${album.title}`} className={`${smallButton} shrink-0 text-gold`}>
+              {t.shareAlbum}
+            </button>
             <button onClick={() => void removeAlbum(album.id)} className={`${smallButton} shrink-0 text-danger`}>{t.remove}</button>
           </li>
         ))}
