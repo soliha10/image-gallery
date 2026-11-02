@@ -1,3 +1,4 @@
+import { normalizeAppLink } from '@gallery/shared'
 import { z } from 'zod'
 
 const schema = z.object({
@@ -8,7 +9,7 @@ const schema = z.object({
   BOT_WEBHOOK_SECRET: z.string().optional(),
   MINI_APP_URL: z.url().optional(),
   /** Direct Mini App link (https://t.me/<bot>/<app>); the same value the web build uses for share links. */
-  VITE_TG_APP_LINK: z.url().optional(),
+  VITE_TG_APP_LINK: z.string().optional(),
   MAX_PHOTOS_PER_USER: z.coerce.number().int().positive().default(300),
   /** Owner for photos added before galleries were personal; local development uses the dev user. */
   LEGACY_OWNER_ID: z.coerce.number().int().positive().optional(),
@@ -38,4 +39,13 @@ if (parsed.NODE_ENV === 'production' && parsed.PUBLIC_URL && !parsed.BOT_WEBHOOK
 }
 
 export const env = parsed
+
+/**
+ * Optional, so a mistyped value must never stop the server: it is cleaned up, and if still unusable
+ * sharing is switched off with a warning in the logs.
+ */
+export const appLinkBase = normalizeAppLink(parsed.VITE_TG_APP_LINK)
+if (parsed.VITE_TG_APP_LINK && !appLinkBase) {
+  console.warn(`VITE_TG_APP_LINK is not a usable link, sharing from the bot is off: "${parsed.VITE_TG_APP_LINK}"`)
+}
 export const devAuthEnabled = parsed.NODE_ENV !== 'production' && !parsed.BOT_TOKEN

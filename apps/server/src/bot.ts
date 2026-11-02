@@ -5,7 +5,7 @@ import type { InlineQueryResultPhoto, Message } from 'grammy/types'
 import { BOT_LANGUAGES, botText, html } from './botText'
 import type { Db } from './db'
 import { albums, photos } from './db/schema'
-import { env } from './env'
+import { appLinkBase, env } from './env'
 import { packId, unpackId } from './lib/compactId'
 import { UnsupportedImageError } from './lib/image'
 import { MediaGroupCollector } from './lib/mediaGroup'
@@ -43,8 +43,7 @@ function splitCaption(caption = '') {
 const escapeLike = (value: string) => value.replace(/[\\%_]/g, '\\$&')
 
 /** Links straight into the Mini App, optionally at a start parameter. */
-const appLink = (param?: string) =>
-  env.VITE_TG_APP_LINK ? (param ? `${env.VITE_TG_APP_LINK}?startapp=${param}` : env.VITE_TG_APP_LINK) : null
+const appLink = (param?: string) => (appLinkBase ? (param ? `${appLinkBase}?startapp=${param}` : appLinkBase) : null)
 
 export function createBot(token: string, db: Db) {
   const bot = new Bot(token)
@@ -158,7 +157,7 @@ export function createBot(token: string, db: Db) {
 
   chat.command('share', async (ctx) => {
     const text = botText(ctx.from.language_code)
-    if (!env.VITE_TG_APP_LINK) return ctx.reply(text.noAppLink)
+    if (!appLinkBase) return ctx.reply(text.noAppLink)
     const token = await getOrCreateShare(db, ctx.from.id, ctx.from.first_name)
     const link = appLink(`g_${token}`)!
     const forward = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text.shareText)}`

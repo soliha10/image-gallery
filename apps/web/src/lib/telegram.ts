@@ -1,3 +1,5 @@
+import { normalizeAppLink } from '@gallery/shared'
+
 interface Insets {
   top: number
   bottom: number
@@ -122,7 +124,7 @@ export function downloadPhoto(url: string, fileName: string) {
 
 /** Opens Telegram's share sheet, or copies the link outside Telegram. */
 function shareLink(param: string, text: string): 'telegram' | 'copied' {
-  const base = import.meta.env.VITE_TG_APP_LINK as string | undefined
+  const base = normalizeAppLink(import.meta.env.VITE_TG_APP_LINK as string | undefined)
   const link = base ? `${base}?startapp=${param}` : `${location.origin}${location.pathname}?startapp=${param}`
   if (tg) {
     tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`)

@@ -77,3 +77,20 @@ export const albumQuerySchema = z.object({ gallery: shareTokenSchema.optional() 
 
 export const photoUrl = (photo: Pick<Photo, 'base'>, width: ImageWidth, ext: 'webp' | 'avif' = 'webp') =>
   `${photo.base}/${width}.${ext}`
+
+/**
+ * The Mini App link is typed by hand into hosting settings, so it is often missing https:// or
+ * has stray spaces. Returns a clean https URL, or null when the value cannot be one.
+ */
+export function normalizeAppLink(value: string | undefined | null): string | null {
+  const trimmed = value?.trim().replace(/\/+$/, '')
+  if (!trimmed) return null
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+  try {
+    const url = new URL(withScheme)
+    if (url.protocol !== 'https:' || !url.hostname.includes('.')) return null
+    return `${url.origin}${url.pathname}`.replace(/\/+$/, '')
+  } catch {
+    return null
+  }
+}
