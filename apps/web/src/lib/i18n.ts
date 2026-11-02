@@ -42,6 +42,18 @@ const uz = {
   qualityMedium: 'O‘rta',
   qualityHigh: 'Yuqori',
   loading: 'Mushukcha yulduzlar orasidan uchib kelmoqda',
+  language: 'Til',
+  sharedGallery: (name: string) => (name ? `${name} galereyasi` : 'Ulashilgan galereya'),
+  backToMine: 'Mening galereyam',
+  shareGallery: 'Galereyani ulashish',
+  shareGalleryText: 'Mening koinotdagi galereyamni ko‘ring',
+  shareHint: 'Havolani olgan har kim galereyangizni ko‘ra oladi, lekin o‘zgartira olmaydi.',
+  revokeShare: 'Havolani bekor qilish',
+  revoked: 'Eski havola endi ishlamaydi.',
+  linkCopied: 'Havola nusxalandi',
+  linkExpired: 'Bu havola endi ishlamaydi. Sizning galereyangiz ochildi.',
+  sharedEmptyTitle: 'Bu galereya hozircha bo‘sh',
+  sharedEmptyBody: 'Egasi rasm qo‘shgach, ular shu yerda paydo bo‘ladi.',
   fallback3d: 'Bu qurilmada oddiy ko‘rinish yoqildi',
   photos: 'ta rasm',
   upload: 'Rasm yuklash',
@@ -107,6 +119,18 @@ const ru: Dictionary = {
   qualityMedium: 'Среднее',
   qualityHigh: 'Высокое',
   loading: 'Котёнок летит к вам сквозь звёзды',
+  language: 'Язык',
+  sharedGallery: (name) => (name ? `Галерея: ${name}` : 'Общая галерея'),
+  backToMine: 'Моя галерея',
+  shareGallery: 'Поделиться галереей',
+  shareGalleryText: 'Посмотрите мою космическую галерею',
+  shareHint: 'Любой, у кого есть ссылка, сможет смотреть галерею, но не менять её.',
+  revokeShare: 'Отозвать ссылку',
+  revoked: 'Старая ссылка больше не работает.',
+  linkCopied: 'Ссылка скопирована',
+  linkExpired: 'Эта ссылка больше не работает. Открыта ваша галерея.',
+  sharedEmptyTitle: 'Эта галерея пока пуста',
+  sharedEmptyBody: 'Фото появятся здесь, когда владелец их добавит.',
   fallback3d: 'На этом устройстве включён простой вид',
   photos: 'изобр.',
   upload: 'Загрузить',
@@ -170,6 +194,18 @@ const en: Dictionary = {
   qualityMedium: 'Medium',
   qualityHigh: 'High',
   loading: 'The kitten is flying in through the stars',
+  language: 'Language',
+  sharedGallery: (name) => (name ? `${name}’s gallery` : 'Shared gallery'),
+  backToMine: 'My gallery',
+  shareGallery: 'Share gallery',
+  shareGalleryText: 'Take a look at my gallery in the stars',
+  shareHint: 'Anyone with the link can view your gallery but not change it.',
+  revokeShare: 'Revoke link',
+  revoked: 'The old link no longer works.',
+  linkCopied: 'Link copied',
+  linkExpired: 'This link no longer works. Your own gallery is open.',
+  sharedEmptyTitle: 'This gallery is empty for now',
+  sharedEmptyBody: 'Photos will appear here once the owner adds them.',
   fallback3d: 'Simple view is on for this device',
   photos: 'images',
   upload: 'Upload',
@@ -191,5 +227,41 @@ const en: Dictionary = {
   confirmDeleteAlbum: 'Delete this album? Its images are kept.',
 }
 
-const language = userLanguage()
-export const t: Dictionary = language === 'ru' ? ru : language === 'en' ? en : uz
+const dictionaries = { uz, ru, en }
+
+export type Language = keyof typeof dictionaries
+export const LANGUAGES: { code: Language; label: string; name: string }[] = [
+  { code: 'uz', label: 'UZ', name: 'O‘zbekcha' },
+  { code: 'ru', label: 'RU', name: 'Русский' },
+  { code: 'en', label: 'EN', name: 'English' },
+]
+
+const KEY = 'language'
+
+function startingLanguage(): Language {
+  try {
+    const saved = localStorage.getItem(KEY)
+    if (saved && saved in dictionaries) return saved as Language
+  } catch {
+    // Without storage the Telegram language decides.
+  }
+  const code = userLanguage()
+  return code === 'ru' || code === 'en' ? code : 'uz'
+}
+
+export let language = startingLanguage()
+
+/** Components read `t` while rendering, so switching updates it in place and the app re-renders. */
+export const t: Dictionary = { ...dictionaries[language] }
+document.documentElement.lang = language
+
+export function setLanguage(next: Language) {
+  language = next
+  Object.assign(t, dictionaries[next])
+  document.documentElement.lang = next
+  try {
+    localStorage.setItem(KEY, next)
+  } catch {
+    // The choice then lasts for this visit only.
+  }
+}

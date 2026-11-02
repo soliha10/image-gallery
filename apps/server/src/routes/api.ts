@@ -1,18 +1,23 @@
+import { randomBytes } from 'node:crypto'
 import {
   albumInputSchema,
+  albumQuerySchema,
   albumReorderSchema,
   photoPatchSchema,
   photoQuerySchema,
   reorderSchema,
+  shareTokenSchema,
   type Me,
   type PhotoPage,
+  type Share,
+  type SharedGallery,
 } from '@gallery/shared'
 import { and, asc, count, desc, eq, ilike, inArray, or, sql, type SQL } from 'drizzle-orm'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { requireUser } from '../auth'
 import type { Db } from '../db'
-import { albums, favorites, photos } from '../db/schema'
+import { albums, favorites, photos, shares } from '../db/schema'
 import { env } from '../env'
 import { UnsupportedImageError } from '../lib/image'
 import { addPhoto, listAlbums, ownsAlbum, QuotaExceededError, toPhoto } from '../lib/photos'
@@ -22,12 +27,19 @@ const idParams = z.object({ id: z.uuid() })
 
 const escapeLike = (value: string) => value.replace(/[\\%_]/g, '\\$&')
 
+const tokenParams = z.object({ token: shareTokenSchema })
+
 /**
- * Every gallery is private to its Telegram user. The one exception is a single photo by id,
- * which is how a shared link opens for someone else.
+ * Every gallery is private to its Telegram user. Others see it only through the owner's share
+ * link (read-only), or one photo at a time through a shared photo link.
  */
 export async function apiRoutes(app: FastifyInstance, { db }: { db: Db }) {
   app.addHook('preHandler', requireUser)
+
+  const sharedOwner = async (token: string) => {
+    const [row] = await db.select({ ownerId: shares.ownerId }).from(shares).where(eq(shares.token, token))
+    return row?.ownerId ?? null
+  }
 
   app.get('/me', async ({ tgUser }): Promise<Me> => {
     const [rows, owned] = await Promise.all([
@@ -44,15 +56,54 @@ export async function apiRoutes(app: FastifyInstance, { db }: { db: Db }) {
     }
   })
 
-  app.get('/albums', (request) => listAlbums(db, request.tgUser.id))
+  app.get('/albums', async (request, reply) => {
+    const { gallery } = albumQuerySchema.parse(request.query)
+    const owner = gallery ? await sharedOwner(gallery) : request.tgUser.id
+    return owner === null ? reply.code(404).send({ error: 'not_found' }) : listAlbums(db, owner)
+  })
 
-  app.get('/photos', async (request): Promise<PhotoPage> => {
+  app.get('/galleries/:token', async (request, reply): Promise<SharedGallery | undefined> => {
+    const { token } = tokenParams.parse(request.params)
+    const [row] = await db
+      .select({ ownerName: shares.ownerName, photoCount: count(photos.id) })
+      .from(shares)
+      .leftJoin(photos, eq(photos.ownerId, shares.ownerId))
+      .where(eq(shares.token, token))
+      .groupBy(shares.ownerId)
+    if (!row) return reply.code(404).send({ error: 'not_found' })
+    return row
+  })
+
+  app.get('/share', async (request): Promise<Share> => {
+    const [row] = await db.select({ token: shares.token }).from(shares).where(eq(shares.ownerId, request.tgUser.id))
+    return { token: row?.token ?? null }
+  })
+
+  // Creating a link is idempotent, so sharing twice sends the same link; revoking makes a new one next time.
+  app.post('/share', async (request): Promise<Share> => {
+    const { id, first_name } = request.tgUser
+    const [row] = await db
+      .insert(shares)
+      .values({ ownerId: id, token: randomBytes(16).toString('base64url'), ownerName: first_name })
+      .onConflictDoUpdate({ target: shares.ownerId, set: { ownerName: first_name } })
+      .returning({ token: shares.token })
+    return { token: row!.token }
+  })
+
+  app.delete('/share', async (request, reply) => {
+    await db.delete(shares).where(eq(shares.ownerId, request.tgUser.id))
+    return reply.code(204).send()
+  })
+
+  app.get('/photos', async (request, reply): Promise<PhotoPage | undefined> => {
     const query = photoQuerySchema.parse(request.query)
-    const owner = request.tgUser.id
-    // Favourites may include photos other people shared; everything else is the viewer's own gallery.
+    const viewer = request.tgUser.id
+    const owner = query.gallery ? await sharedOwner(query.gallery) : viewer
+    if (owner === null) return reply.code(404).send({ error: 'not_found' })
+    // Favourites may include photos other people shared; everything else is one gallery.
     const filters: (SQL | undefined)[] = [
-      query.favorites
-        ? inArray(photos.id, db.select({ id: favorites.photoId }).from(favorites).where(eq(favorites.userId, owner)))
+      query.favorites && !query.gallery
+        ? inArray(photos.id, db.select({ id: favorites.photoId }).from(favorites).where(eq(favorites.userId, viewer)))
         : eq(photos.ownerId, owner),
     ]
     if (query.album) filters.push(eq(photos.albumId, query.album))

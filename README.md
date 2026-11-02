@@ -5,7 +5,11 @@ observatoriya bo'ylab erkin boshqaradi va rasmlarni yulduzlar orasida tomosha qi
 
 Har bir Telegram foydalanuvchisining galereyasi shaxsiy: rasmlar, albomlar, qidiruv va boshqaruv
 faqat egasiga ko'rinadi. Rasm botga yuborilsa yoki ilovada yuklansa, yuborganning galereyasiga
-tushadi. Ulashilgan havola boshqalarga faqat o'sha bitta rasmni ochadi. Bir foydalanuvchiga
+tushadi. Egasi "Galereyani ulashish" orqali butun galereya havolasini beradi: uni olgan odam
+galereyani faqat ko'radi. Havola istalgan payt bekor qilinadi. Bitta rasmni ham alohida ulashish mumkin.
+
+Ilova o'zbek, rus va ingliz tillarida. Til avval Telegram tilidan olinadi, keyin yuqoridagi UZ/RU/EN
+tanlagichi bilan almashtiriladi va eslab qolinadi. Bot har kimga o'z Telegram tilida javob beradi. Bir foydalanuvchiga
 `MAX_PHOTOS_PER_USER` (standart 300) tagacha rasm. Rasmlar bot orqali yoki ilova ichidagi boshqaruv paneli orqali qo'shiladi.
 
 ## Lokal ishga tushirish

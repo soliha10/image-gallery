@@ -49,3 +49,11 @@ export const favorites = pgTable(
   },
   (t) => [primaryKey({ columns: [t.userId, t.photoId] })],
 )
+
+/** A gallery owner's public link. The token stands in for the owner's Telegram id in shared URLs. */
+export const shares = pgTable('shares', {
+  ownerId: bigint({ mode: 'number' }).primaryKey(),
+  token: text().notNull().unique(),
+  ownerName: text().notNull().default(''),
+  createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+})

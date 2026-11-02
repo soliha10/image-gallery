@@ -129,3 +129,44 @@ describe('personal galleries', () => {
     expect((await upload(BOB)).statusCode).toBe(201)
   })
 })
+
+describe('shared gallery links', () => {
+  let token: string
+
+  it('gives an owner one stable link', async () => {
+    expect((await app.inject({ url: '/api/share', headers: as(ALICE) })).json().token).toBeNull()
+    token = (await app.inject({ method: 'POST', url: '/api/share', headers: as(ALICE) })).json().token
+    expect(token).toMatch(/^[A-Za-z0-9_-]{22}$/)
+    const again = await app.inject({ method: 'POST', url: '/api/share', headers: as(ALICE) })
+    expect(again.json().token).toBe(token)
+  })
+
+  it('lets anyone with the link look, and only look', async () => {
+    const headers = as(BOB)
+    const info = await app.inject({ url: `/api/galleries/${token}`, headers })
+    expect(info.json()).toEqual({ ownerName: 'T', photoCount: 3 })
+    const shared = await app.inject({ url: `/api/photos?gallery=${token}`, headers })
+    expect(shared.json().total).toBe(3)
+    expect((await app.inject({ url: `/api/albums?gallery=${token}`, headers })).json()[0].title).toBe('Alice')
+    // Favourites only make sense in one's own gallery; with a link they do not leak the visitor's list.
+    expect((await app.inject({ url: `/api/photos?gallery=${token}&favorites=1`, headers })).json().total).toBe(3)
+
+    const photo = shared.json().items[0].id
+    const patch = await app.inject({ method: 'PATCH', url: `/api/admin/photos/${photo}`, headers, payload: { title: 'x' } })
+    expect(patch.statusCode).toBe(404)
+    expect((await app.inject({ url: '/api/photos', headers })).json().items.every((p: { id: string }) => p.id !== photo)).toBe(true)
+  })
+
+  it('stops working once revoked, and the next link is a new one', async () => {
+    expect((await app.inject({ method: 'DELETE', url: '/api/share', headers: as(ALICE) })).statusCode).toBe(204)
+    expect((await app.inject({ url: `/api/galleries/${token}`, headers: as(BOB) })).statusCode).toBe(404)
+    expect((await app.inject({ url: `/api/photos?gallery=${token}`, headers: as(BOB) })).statusCode).toBe(404)
+    const fresh = await app.inject({ method: 'POST', url: '/api/share', headers: as(ALICE) })
+    expect(fresh.json().token).not.toBe(token)
+  })
+
+  it('rejects malformed tokens', async () => {
+    expect((await app.inject({ url: '/api/photos?gallery=..%2F', headers: as(BOB) })).statusCode).toBe(400)
+    expect((await app.inject({ url: '/api/galleries/short', headers: as(BOB) })).statusCode).toBe(400)
+  })
+})

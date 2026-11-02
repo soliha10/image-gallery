@@ -30,7 +30,6 @@ const INTRO_HEIGHT = 9
 let introPlayed = false
 
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
-const QUALITY_LABELS: Record<Quality, string> = { low: t.qualityLow, medium: t.qualityMedium, high: t.qualityHigh }
 
 function guideSeen() {
   try {
@@ -595,7 +594,7 @@ export default function Scene3D() {
             setTouring(!touring)
           }}
         />
-        <SceneButton label={`${t.quality}: ${QUALITY_LABELS[quality]}`} onClick={() => changeQuality(nextQuality(quality), true)} />
+        <SceneButton label={`${t.quality}: ${{ low: t.qualityLow, medium: t.qualityMedium, high: t.qualityHigh }[quality]}`} onClick={() => changeQuality(nextQuality(quality), true)} />
       </div>
       {guide && (
         <Guide

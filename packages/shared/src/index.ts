@@ -40,7 +40,20 @@ export interface Me {
   photoLimit: number
 }
 
+/** Base64url, as Telegram only allows these characters in a startapp parameter. */
+export const shareTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{16,48}$/)
+
+export interface SharedGallery {
+  ownerName: string
+  photoCount: number
+}
+
+export interface Share {
+  token: string | null
+}
+
 export const photoQuerySchema = z.object({
+  gallery: shareTokenSchema.optional(),
   album: z.uuid().optional(),
   q: z.string().trim().max(80).optional(),
   favorites: z.enum(['1']).optional(),
@@ -59,6 +72,8 @@ export const reorderSchema = z.object({ ids: z.array(z.uuid()).min(1).max(1000) 
 export const albumInputSchema = z.object({ title: z.string().trim().min(1).max(80) })
 
 export const albumReorderSchema = reorderSchema
+
+export const albumQuerySchema = z.object({ gallery: shareTokenSchema.optional() })
 
 export const photoUrl = (photo: Pick<Photo, 'base'>, width: ImageWidth, ext: 'webp' | 'avif' = 'webp') =>
   `${photo.base}/${width}.${ext}`

@@ -120,17 +120,32 @@ export function downloadPhoto(url: string, fileName: string) {
   else window.open(absolute, '_blank')
 }
 
-export function sharePhoto(photoId: string, text: string) {
+/** Opens Telegram's share sheet, or copies the link outside Telegram. */
+function shareLink(param: string, text: string): 'telegram' | 'copied' {
   const base = import.meta.env.VITE_TG_APP_LINK as string | undefined
-  const link = base ? `${base}?startapp=photo_${photoId}` : location.href
-  const url = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`
-  if (tg) tg.openTelegramLink(url)
-  else void navigator.clipboard?.writeText(link)
+  const link = base ? `${base}?startapp=${param}` : `${location.origin}${location.pathname}?startapp=${param}`
+  if (tg) {
+    tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`)
+    return 'telegram'
+  }
+  void navigator.clipboard?.writeText(link)
+  return 'copied'
 }
 
+export const sharePhoto = (photoId: string, text: string) => shareLink(`photo_${photoId}`, text)
+
+export const shareGallery = (token: string, text: string) => shareLink(`g_${token}`, text)
+
+const startParam = () => app?.initDataUnsafe.start_param ?? new URLSearchParams(location.search).get('startapp') ?? ''
+
 export function startPhotoId() {
-  const param = app?.initDataUnsafe.start_param ?? new URLSearchParams(location.search).get('startapp') ?? ''
+  const param = startParam()
   return param.startsWith('photo_') ? param.slice('photo_'.length) : null
+}
+
+export function startGalleryToken() {
+  const param = startParam()
+  return param.startsWith('g_') ? param.slice('g_'.length) : null
 }
 
 export const userLanguage = () => tg?.initDataUnsafe.user?.language_code ?? navigator.language.slice(0, 2)

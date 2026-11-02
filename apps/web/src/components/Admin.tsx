@@ -2,7 +2,7 @@ import { photoUrl, type Photo } from '@gallery/shared'
 import { useEffect, useRef, useState } from 'react'
 import { api, ApiError } from '../lib/api'
 import { t } from '../lib/i18n'
-import { backButton, confirm, haptic, mainButton } from '../lib/telegram'
+import { backButton, confirm, haptic, mainButton, shareGallery } from '../lib/telegram'
 import { useStore } from '../lib/store'
 import { CloseIcon } from './icons'
 
@@ -87,11 +87,30 @@ export function Admin() {
   const filter = useStore((s) => s.filter)
   const refresh = useStore((s) => s.refresh)
   const me = useStore((s) => s.me)
+  const setNotice = useStore((s) => s.setNotice)
+  const [shareToken, setShareToken] = useState<string | null>(null)
   const [albumTitle, setAlbumTitle] = useState('')
   const [progress, setProgress] = useState<string | null>(null)
   const file = useRef<HTMLInputElement>(null)
 
   useEffect(() => backButton(() => setSheet(null)), [setSheet])
+  useEffect(() => {
+    void api.share().then(({ token }) => setShareToken(token)).catch(() => undefined)
+  }, [])
+
+  const share = async () => {
+    const { token } = await api.createShare()
+    setShareToken(token!)
+    haptic.tap()
+    if (shareGallery(token!, t.shareGalleryText) === 'copied') setNotice('linkCopied')
+  }
+
+  const revoke = async () => {
+    await api.revokeShare()
+    setShareToken(null)
+    haptic.success()
+    setNotice('revoked')
+  }
   useEffect(() => mainButton(t.upload, () => file.current?.click()) ?? undefined, [])
 
   const upload = async (files: File[]) => {
@@ -167,6 +186,19 @@ export function Admin() {
       </button>
       {progress && <p className="mt-2 text-sm text-hint" role="status">{progress}</p>}
       <p className="mt-2 text-xs leading-relaxed text-hint">{t.botHint}</p>
+
+      <h3 className="mt-7 mb-2 text-sm font-bold text-hint">{t.shareGallery}</h3>
+      <div className="flex gap-2">
+        <button onClick={() => void share()} className={`${smallButton} flex-1 bg-surface text-ink ring-1 ring-gold/60`}>
+          {t.shareGallery}
+        </button>
+        {shareToken && (
+          <button onClick={() => void revoke()} className={`${smallButton} shrink-0 text-danger`}>
+            {t.revokeShare}
+          </button>
+        )}
+      </div>
+      <p className="mt-2 text-xs leading-relaxed text-hint">{t.shareHint}</p>
 
       <h3 className="mt-7 mb-2 text-sm font-bold text-hint">{t.albums}</h3>
       <div className="flex gap-2">

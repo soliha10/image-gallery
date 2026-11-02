@@ -1,4 +1,4 @@
-import type { Album, Me, Photo, PhotoPage } from '@gallery/shared'
+import type { Album, Me, Photo, PhotoPage, Share, SharedGallery } from '@gallery/shared'
 import { tg } from './telegram'
 
 export class ApiError extends Error {
@@ -26,15 +26,21 @@ export interface PhotoFilter {
 
 export const api = {
   me: () => request<Me>('/me'),
-  albums: () => request<Album[]>('/albums'),
-  photos({ album, q, favorites }: PhotoFilter, cursor: number) {
+  albums: (gallery?: string) => request<Album[]>(gallery ? `/albums?gallery=${gallery}` : '/albums'),
+  /** `gallery` reads someone else's shared gallery instead of the viewer's own. */
+  photos({ album, q, favorites }: PhotoFilter, cursor: number, gallery?: string) {
     const params = new URLSearchParams({ cursor: String(cursor) })
+    if (gallery) params.set('gallery', gallery)
     if (album) params.set('album', album)
     if (q) params.set('q', q)
     if (favorites) params.set('favorites', '1')
     return request<PhotoPage>(`/photos?${params}`)
   },
   photo: (id: string) => request<Photo>(`/photos/${id}`),
+  gallery: (token: string) => request<SharedGallery>(`/galleries/${token}`),
+  share: () => request<Share>('/share'),
+  createShare: () => request<Share>('/share', { method: 'POST' }),
+  revokeShare: () => request<void>('/share', { method: 'DELETE' }),
   favorite: (id: string, on: boolean) => request<void>(`/photos/${id}/favorite`, { method: on ? 'PUT' : 'DELETE' }),
   upload(file: File, albumId?: string) {
     const body = new FormData()
