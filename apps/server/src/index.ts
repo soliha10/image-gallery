@@ -1,7 +1,7 @@
 import * as Sentry from '@sentry/node'
 import { buildApp } from './app'
 import { createBot } from './bot'
-import { createDb } from './db'
+import { closeDb, createDb } from './db'
 import { env } from './env'
 
 if (env.SENTRY_DSN) Sentry.init({ dsn: env.SENTRY_DSN, environment: env.NODE_ENV })
@@ -32,6 +32,8 @@ if (bot) {
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => {
-    void Promise.allSettled([app.close(), bot?.stop()]).then(() => process.exit(0))
+    void Promise.allSettled([app.close(), bot?.stop()])
+      .then(() => closeDb())
+      .finally(() => process.exit(0))
   })
 }

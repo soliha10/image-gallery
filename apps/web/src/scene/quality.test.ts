@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { lowerQuality, nextQuality, pixelRatioFor, startingQuality } from './quality'
+import { EFFECTS, lowerQuality, nextQuality, pixelRatioFor, startingQuality } from './quality'
 
 describe('quality', () => {
   it('starts weak devices low and others at medium', () => {
@@ -22,5 +22,18 @@ describe('quality', () => {
 
   it('cycles through all tiers', () => {
     expect(nextQuality(nextQuality(nextQuality('low')))).toBe('low')
+  })
+})
+
+describe('effects', () => {
+  it('never gets heavier on a lower tier', () => {
+    const tiers = [EFFECTS.low, EFFECTS.medium, EFFECTS.high]
+    for (const key of ['skySize', 'stars', 'nebulae', 'asteroids'] as const) {
+      expect(tiers.map((tier) => tier[key])).toEqual(tiers.map((tier) => tier[key]).sort((a, b) => a - b))
+    }
+  })
+
+  it('keeps the low tier free of moving extras', () => {
+    expect(EFFECTS.low).toMatchObject({ asteroids: 0, shootingStars: false, trail: false, drift: false })
   })
 })

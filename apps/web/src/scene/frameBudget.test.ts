@@ -10,8 +10,15 @@ const run = (budget: FrameBudget, delta: number, frames = 90) => {
 describe('FrameBudget', () => {
   it('classifies sustained frame rates', () => {
     expect(run(new FrameBudget(), 1 / 60)).toBe('ok')
-    expect(run(new FrameBudget(), 1 / 20)).toBe('slow')
-    expect(run(new FrameBudget(), 1 / 10)).toBe('unusable')
+    expect(run(new FrameBudget(), 1 / 20, 180)).toBe('slow')
+    expect(run(new FrameBudget(), 1 / 10, 180)).toBe('unusable')
+  })
+
+  it('forgives one slow window', () => {
+    const budget = new FrameBudget()
+    expect(run(budget, 1 / 20)).toBeNull()
+    expect(run(budget, 1 / 60)).toBe('ok')
+    expect(run(budget, 1 / 20)).toBeNull()
   })
 
   it('ignores a long pause between frames', () => {

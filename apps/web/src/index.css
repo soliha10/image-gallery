@@ -10,9 +10,10 @@
   --color-accent: var(--tg-accent);
   --color-on-accent: var(--tg-on-accent);
   --color-danger: var(--tg-danger);
-  --color-paper: #f6e7cc;
-  --color-amber: #e8a84c;
-  --color-walnut: #1b0f0a;
+  --color-star: #eef0ff;
+  --color-gold: #f4c95d;
+  --color-void: #090a1c;
+  --color-nebula: #7c6cf0;
 }
 
 :root {
@@ -20,23 +21,13 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
-  --tg-bg: #1b0f0a;
-  --tg-surface: #2a1a12;
-  --tg-text: #f6e7cc;
-  --tg-hint: #b69c80;
-  --tg-accent: #e8a84c;
-  --tg-on-accent: #1b0f0a;
-  --tg-danger: #ef7d6b;
-}
-
-:root[data-scheme='light'] {
-  --tg-bg: #fbf4e7;
-  --tg-surface: #f1e5d0;
-  --tg-text: #2a1a12;
-  --tg-hint: #7d6650;
-  --tg-accent: #a8591b;
-  --tg-on-accent: #fff8ec;
-  --tg-danger: #bb3a2a;
+  --tg-bg: #090a1c;
+  --tg-surface: #15173a;
+  --tg-text: #eef0ff;
+  --tg-hint: #aeb4dc;
+  --tg-accent: #f4c95d;
+  --tg-on-accent: #090a1c;
+  --tg-danger: #ff9385;
 }
 
 html,
@@ -45,7 +36,7 @@ body,
   height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
-  background: var(--color-walnut);
+  background: var(--color-void);
   font-family: var(--font-sans);
   -webkit-tap-highlight-color: transparent;
   -webkit-font-smoothing: antialiased;
@@ -75,8 +66,29 @@ button {
 
 .room-vignette {
   background:
-    linear-gradient(to bottom, rgb(21 12 8 / 0.75), transparent 22%),
-    linear-gradient(to top, rgb(21 12 8 / 0.92), transparent 34%);
+    linear-gradient(to bottom, rgb(9 10 28 / 0.6), transparent 20%),
+    linear-gradient(to top, rgb(9 10 28 / 0.86), transparent 30%);
+}
+
+/* The one panel style used by every surface floating over the scene. */
+.glass {
+  background: rgb(21 23 58 / 0.68);
+  border: 1px solid rgb(238 240 255 / 0.14);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+/* Faint fixed stars behind DOM screens, so they feel like the same place as the scene. */
+.starfield {
+  background-color: var(--color-void);
+  background-image:
+    radial-gradient(1px 1px at 18% 12%, rgb(238 240 255 / 0.7), transparent),
+    radial-gradient(1px 1px at 72% 28%, rgb(238 240 255 / 0.5), transparent),
+    radial-gradient(1.5px 1.5px at 44% 66%, rgb(244 201 93 / 0.5), transparent),
+    radial-gradient(1px 1px at 86% 78%, rgb(238 240 255 / 0.6), transparent),
+    radial-gradient(1px 1px at 8% 88%, rgb(238 240 255 / 0.4), transparent),
+    radial-gradient(60% 40% at 80% 0%, rgb(124 108 240 / 0.16), transparent);
+  background-attachment: fixed;
 }
 
 @keyframes rise {

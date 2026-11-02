@@ -216,7 +216,7 @@ export function Lightbox() {
               }}
               aria-label={liked ? t.unlike : t.like}
               aria-pressed={liked}
-              className={`flex size-11 items-center justify-center ${liked ? 'text-amber' : ''}`}
+              className={`flex size-11 items-center justify-center ${liked ? 'text-gold' : ''}`}
             >
               <HeartIcon filled={liked} />
             </button>

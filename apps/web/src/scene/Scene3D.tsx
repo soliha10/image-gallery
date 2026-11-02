@@ -1,16 +1,18 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { Loader } from '../components/States'
 import { t } from '../lib/i18n'
 import { haptic } from '../lib/telegram'
 import { useStore, type Rect } from '../lib/store'
 import { sceneBridge } from './bridge'
 import { Cat } from './Cat'
 import { Controls, type StickView } from './controls'
+import { Cosmos, softDot } from './Cosmos'
 import { FrameBudget } from './frameBudget'
 import { Paintings, type PaintingsHandle } from './Paintings'
-import { device, lowerQuality, nextQuality, pixelRatioFor, savedQuality, saveQuality, startingQuality, type Quality } from './quality'
-import { Room } from './Room'
+import { device, EFFECTS, lowerQuality, nextQuality, pixelRatioFor, savedQuality, saveQuality, startingQuality, type Quality } from './quality'
+import { Trail } from './Trail'
 import { angleAt, clamp, mod, resolve, SLOTS, slotOfIndex, Walker, WALL_RADIUS, wrapAngle } from './walker'
 
 const CAMERA_LIMIT = WALL_RADIUS - 0.7
@@ -21,6 +23,11 @@ const PITCH_MIN = 0.1
 const PITCH_MAX = 0.75
 const GUIDE_KEY = 'scene-guide-seen'
 const DPR_STEPS = [600, 1400, 2400]
+const INTRO_TIME = 1.8
+const INTRO_HEIGHT = 9
+
+/** The arrival plays once per visit, not every time the viewer comes back from the grid. */
+let introPlayed = false
 
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
 const QUALITY_LABELS: Record<Quality, string> = { low: t.qualityLow, medium: t.qualityMedium, high: t.qualityHigh }
@@ -41,7 +48,7 @@ function markGuideSeen() {
   }
 }
 
-function Dust() {
+function Dust({ map }: { map: THREE.Texture }) {
   const geometry = useMemo(() => {
     const points = new Float32Array(90 * 3)
     for (let i = 0; i < points.length; i += 3) {
@@ -62,7 +69,7 @@ function Dust() {
   })
   return (
     <points ref={ref} geometry={geometry} frustumCulled={false}>
-      <pointsMaterial color="#ffd9a0" size={0.018} transparent opacity={0.3} depthWrite={false} />
+      <pointsMaterial map={map} color="#cfd8ff" size={0.03} transparent opacity={0.35} depthWrite={false} />
     </points>
   )
 }
@@ -80,19 +87,24 @@ interface DirectorProps {
   onSlow: () => void
   onUnusable: () => void
   onTouring: (touring: boolean) => void
+  onReady: () => void
+  intro: React.RefObject<number>
+  drop: React.RefObject<number>
   autopilot: boolean
 }
 
 /** Moves the cat, camera and key light; all per-frame work bypasses React. */
-function Director({ walker, controls, paintings, cat, shadow, light, pendingOpen, onOpen, onResume, onSlow, onUnusable, onTouring, autopilot }: DirectorProps) {
+function Director({ walker, controls, paintings, cat, shadow, light, pendingOpen, onOpen, onResume, onSlow, onUnusable, onTouring, onReady, intro, drop, autopilot }: DirectorProps) {
   const size = useThree((s) => s.size)
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera
-  const start = { orbit: Math.PI, pitch: 0.3, view: 1, slot: 0, focusX: walker.x, focusZ: walker.z, followAfter: 0, distance: 3.2 }
+  const arriving = intro.current > 0
+  const start = { orbit: arriving ? 0.5 : Math.PI, pitch: arriving ? 0.2 : 0.3, view: arriving ? 0 : 1, slot: 0, focusX: walker.x, focusZ: walker.z, followAfter: 0, distance: 3.2 }
   const state = useRef(start)
   const setCurrentIndex = useStore((s) => s.setCurrentIndex)
   const photos = useStore((s) => s.photos)
   const lastIndex = useRef<number | null>(null)
   const touring = useRef(false)
+  const first = useRef(true)
   const budget = useMemo(() => new FrameBudget(), [])
   const look = useMemo(() => ({ orbit: new THREE.Vector3(), target: new THREE.Vector3(), view: new THREE.Vector3(), viewTarget: new THREE.Vector3() }), [])
 
@@ -106,11 +118,12 @@ function Director({ walker, controls, paintings, cat, shadow, light, pendingOpen
   const placeCamera = (time: number) => {
     const s = state.current
     const eased = s.view * s.view * (3 - 2 * s.view)
-    const flat = Math.cos(s.pitch) * s.distance
-    look.orbit.set(s.focusX + Math.sin(s.orbit) * flat, 0.55 + Math.sin(s.pitch) * s.distance, s.focusZ + Math.cos(s.orbit) * flat)
+    const distance = s.distance + (intro.current / INTRO_TIME) * 2.4
+    const flat = Math.cos(s.pitch) * distance
+    look.orbit.set(s.focusX + Math.sin(s.orbit) * flat, 0.55 + Math.sin(s.pitch) * distance, s.focusZ + Math.cos(s.orbit) * flat)
     const reach = Math.hypot(look.orbit.x, look.orbit.z)
     if (reach > CAMERA_LIMIT) look.orbit.multiplyScalar(CAMERA_LIMIT / reach).setY(look.orbit.y)
-    look.target.set(s.focusX, 0.7, s.focusZ)
+    look.target.set(s.focusX, 0.7 + drop.current * 0.5, s.focusZ)
 
     const angle = angleAt(s.slot)
     const drift = reducedMotion ? 0 : Math.sin(time * 0.25) * 0.015
@@ -184,12 +197,23 @@ function Director({ walker, controls, paintings, cat, shadow, light, pendingOpen
   }, [controls])
 
   useFrame(({ clock }, rawDelta) => {
+    if (first.current) {
+      first.current = false
+      onReady()
+    }
     const verdict = budget.sample(rawDelta)
     if (verdict === 'slow') onSlow()
     if (verdict === 'unusable') onUnusable()
 
     const dt = Math.min(rawDelta, 0.05)
     const s = state.current
+    if (intro.current > 0) {
+      intro.current = Math.max(intro.current - dt, 0)
+      const left = intro.current / INTRO_TIME
+      drop.current = INTRO_HEIGHT * left * left * left
+    }
+    const arrived = intro.current === 0
+    if (arrived) drop.current = 0
     const time = clock.elapsedTime
 
     if (controls.lookX !== 0 || controls.lookY !== 0) {
@@ -228,13 +252,13 @@ function Director({ walker, controls, paintings, cat, shadow, light, pendingOpen
     const opening = pendingOpen.current !== null && walker.arrived
     const lightboxOpen = useStore.getState().lightbox !== null
     if (walker.viewing !== null) s.slot = walker.viewing
-    const framed = opening || lightboxOpen || walker.viewing !== null
+    const framed = arrived && (opening || lightboxOpen || walker.viewing !== null)
     if (framed) s.orbit += wrapAngle(angleAt(s.slot) + Math.PI - s.orbit) * (1 - Math.exp(-dt * 3))
     s.view = clamp(s.view + ((framed ? 1 : -1) * dt) / (opening ? 0.42 : 1.1), 0, 1)
     placeCamera(time)
 
     if (cat.current && shadow.current) {
-      cat.current.position.set(walker.x, 0, walker.z)
+      cat.current.position.set(walker.x, drop.current, walker.z)
       cat.current.rotation.y = walker.heading
       shadow.current.position.set(walker.x, 0.015, walker.z)
     }
@@ -299,18 +323,18 @@ function Stick({ controls }: { controls: Controls }) {
       {coarse && (
         <div
           ref={ghost}
-          className="pointer-events-none absolute left-7 bottom-[calc(var(--safe-bottom)+150px)] flex size-20 items-center justify-center rounded-full border border-paper/25 transition-opacity"
+          className="pointer-events-none absolute left-7 bottom-[calc(var(--safe-bottom)+150px)] flex size-20 items-center justify-center rounded-full border border-star/30 transition-opacity"
           aria-hidden
         >
-          <span className="size-8 rounded-full bg-paper/20" />
+          <span className="size-8 rounded-full bg-star/20" />
         </div>
       )}
       <div
         ref={base}
-        className="pointer-events-none absolute top-0 left-0 z-[6] flex size-28 items-center justify-center rounded-full border-2 border-paper/40 bg-black/20 opacity-0"
+        className="pointer-events-none absolute top-0 left-0 z-[6] flex size-28 items-center justify-center rounded-full border-2 border-star/40 bg-black/20 opacity-0"
         aria-hidden
       >
-        <div ref={knob} className="size-12 rounded-full bg-paper/80 shadow-lg" />
+        <div ref={knob} className="size-12 rounded-full bg-star/80 shadow-lg" />
       </div>
     </>
   )
@@ -319,14 +343,14 @@ function Stick({ controls }: { controls: Controls }) {
 function Guide({ onClose }: { onClose: () => void }) {
   const lines = matchMedia('(pointer: coarse)').matches ? [t.guideMove, t.guideLook, t.guideTap] : [t.guideKeys, t.guideTap]
   return (
-    <div className="rise absolute inset-x-6 top-[calc(var(--safe-top)+150px)] z-20 mx-auto max-w-80 rounded-2xl bg-walnut/90 p-5 text-paper shadow-xl backdrop-blur-md">
+    <div className="rise absolute inset-x-6 top-[calc(var(--safe-top)+150px)] z-20 mx-auto max-w-80 glass rounded-2xl p-5 text-star shadow-xl">
       <h2 className="font-display text-xl font-semibold">{t.guideTitle}</h2>
-      <ul className="mt-2 space-y-1.5 text-sm leading-snug text-paper/80">
+      <ul className="mt-2 space-y-1.5 text-sm leading-snug text-star/80">
         {lines.map((line) => (
           <li key={line}>{line}</li>
         ))}
       </ul>
-      <button onClick={onClose} className="mt-4 min-h-11 w-full rounded-xl bg-amber text-sm font-bold text-walnut">
+      <button onClick={onClose} className="mt-4 min-h-11 w-full rounded-xl bg-gold text-sm font-bold text-void">
         {t.guideOk}
       </button>
     </div>
@@ -338,7 +362,7 @@ function SceneButton({ label, onClick, active }: { label: string; onClick: () =>
     <button
       onClick={onClick}
       aria-pressed={active}
-      className={`min-h-9 rounded-full px-3.5 text-[13px] font-semibold backdrop-blur-sm transition-colors ${active ? 'bg-amber text-walnut' : 'bg-black/35 text-paper'}`}
+      className={`min-h-11 rounded-full px-4 text-[13px] font-semibold transition-colors ${active ? 'bg-gold text-void' : 'glass text-star'}`}
     >
       {label}
     </button>
@@ -354,6 +378,9 @@ export default function Scene3D() {
   const shadow = useRef<THREE.Mesh>(null)
   const light = useRef<THREE.PointLight>(null)
   const pendingOpen = useRef<number | null>(null)
+  const drop = useRef(0)
+  const mounted = useRef(true)
+  const intro = useRef(reducedMotion || introPlayed || useStore.getState().lightbox ? 0 : INTRO_TIME)
   const three = useRef<{ camera: THREE.Camera } | null>(null)
   const raycaster = useMemo(() => new THREE.Raycaster(), [])
 
@@ -363,14 +390,15 @@ export default function Scene3D() {
   const openLightbox = useStore((s) => s.openLightbox)
   const loadMore = useStore((s) => s.loadMore)
   const markWebglFailed = useStore((s) => s.markWebglFailed)
-  const scheme = document.documentElement.dataset.scheme
   const [quality, setQuality] = useState<Quality>(() => savedQuality() ?? startingQuality(device()))
   const [dpr, setDpr] = useState(1)
   const [visible, setVisible] = useState(!document.hidden)
   const [settled, setSettled] = useState(false)
   const [touring, setTouring] = useState(false)
-  const [guide, setGuide] = useState(() => !guideSeen())
-  const low = quality === 'low'
+  const [guide, setGuide] = useState(false)
+  const [ready, setReady] = useState(false)
+  const effects = EFFECTS[quality]
+  const shadowMap = useMemo(() => softDot('rgba(255,255,255,.95)', 'rgba(255,255,255,.7)'), [])
 
   // Sharpness arrives in steps after the room is up, so opening stays quick.
   useEffect(() => {
@@ -380,6 +408,20 @@ export default function Scene3D() {
     )
     return () => timers.forEach(clearTimeout)
   }, [quality])
+
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
+
+  useEffect(() => {
+    introPlayed = true
+    if (guideSeen()) return
+    const timer = setTimeout(() => setGuide(true), intro.current > 0 ? 2200 : 300)
+    return () => clearTimeout(timer)
+  }, [])
 
   useEffect(() => {
     const onVisibility = () => setVisible(!document.hidden)
@@ -403,10 +445,15 @@ export default function Scene3D() {
 
   useEffect(() => {
     controls.onActive = () => {
+      intro.current = 0
       walker.wake()
       setGuide(false)
     }
     controls.onTap = (x, y) => {
+      if (intro.current > 0) {
+        intro.current = 0
+        return
+      }
       const element = three.current ? (document.querySelector('[data-scene]') as HTMLElement | null) : null
       if (!element || !three.current) return
       const ndc = new THREE.Vector2((x / element.clientWidth) * 2 - 1, -(y / element.clientHeight) * 2 + 1)
@@ -460,27 +507,31 @@ export default function Scene3D() {
           dpr={dpr}
           flat
           frameloop={visible && !settled ? 'always' : 'never'}
-          camera={{ fov: 46, near: 0.1, far: 40, position: [0, 1.7, 4.9] }}
-          gl={{ antialias: !low, powerPreference: 'high-performance', alpha: false }}
+          camera={{ fov: 46, near: 0.1, far: 320, position: [0, 1.7, 4.9] }}
+          gl={{ antialias: effects.antialias, powerPreference: 'high-performance', alpha: false }}
           onCreated={(state) => {
             three.current = state
             const canvas = state.gl.domElement
             let restoreTimer = 0
             canvas.addEventListener('webglcontextlost', (event) => {
               event.preventDefault()
-              restoreTimer = window.setTimeout(markWebglFailed, 3000)
+              // Leaving the room releases the context on purpose; that is not a failure.
+              restoreTimer = window.setTimeout(() => {
+                if (mounted.current) markWebglFailed()
+              }, 3000)
             })
             canvas.addEventListener('webglcontextrestored', () => clearTimeout(restoreTimer))
           }}
         >
-          <color attach="background" args={[scheme === 'light' ? '#3d2a1e' : '#150c08']} />
-          <fog attach="fog" args={[scheme === 'light' ? '#3d2a1e' : '#150c08', 11, 30]} />
-          <hemisphereLight args={['#ffdfb0', '#4a2c1c', scheme === 'light' ? 2.1 : 1.35]} />
-          <pointLight color="#ffd9a0" position={[0, 3.6, 0]} intensity={16} distance={15} decay={1.3} />
-          <pointLight ref={light} color="#ffc98a" intensity={9} distance={9} decay={1.5} />
+          <color attach="background" args={['#05061a']} />
+          <fog attach="fog" args={['#090a1c', 18, 70]} />
+          <hemisphereLight args={['#d6deff', '#3b3478', 1.7]} />
+          <directionalLight color="#bcd0ff" position={[-5, 8, 7]} intensity={1.1} />
+          <pointLight color="#ffd9a0" position={[0, 2.2, 0]} intensity={14} distance={15} decay={1.3} />
+          <pointLight ref={light} color="#fff0dc" intensity={8} distance={8} decay={1.5} />
 
-          <Room night={scheme !== 'light'} />
-          <Paintings ref={paintings} walker={walker} photos={photos} textureWidth={low ? 400 : 800} />
+          <Cosmos walker={walker} effects={effects} calm={reducedMotion} />
+          <Paintings ref={paintings} walker={walker} photos={photos} textureWidth={effects.textureWidth} drift={effects.drift && !reducedMotion} starMap={shadowMap} />
 
           <group ref={cat}>
             <Cat walker={walker} />
@@ -488,11 +539,12 @@ export default function Scene3D() {
               <sphereGeometry args={[0.65, 8, 8]} />
             </mesh>
           </group>
-          <mesh ref={shadow} rotation={[-Math.PI / 2, 0, 0]}>
-            <circleGeometry args={[0.46, 24]} />
-            <meshBasicMaterial color="#000" transparent opacity={0.3} depthWrite={false} />
+          <mesh ref={shadow} rotation={[-Math.PI / 2, 0, 0]} renderOrder={1}>
+            <planeGeometry args={[1.5, 1.5]} />
+            <meshBasicMaterial map={shadowMap} color="#02030f" transparent depthWrite={false} toneMapped={false} />
           </mesh>
-          {!reducedMotion && !low && <Dust />}
+          {!reducedMotion && effects.drift && <Dust map={shadowMap} />}
+          {!reducedMotion && effects.trail && <Trail walker={walker} drop={drop} map={shadowMap} />}
 
           <Director
             walker={walker}
@@ -505,6 +557,9 @@ export default function Scene3D() {
             autopilot={!lightboxOpen}
             onResume={() => setSettled(false)}
             onTouring={setTouring}
+            onReady={() => setReady(true)}
+            intro={intro}
+            drop={drop}
             onSlow={() => {
               if (quality !== 'low') changeQuality(lowerQuality(quality), false)
               else setDpr(1)
@@ -522,6 +577,11 @@ export default function Scene3D() {
         </Canvas>
       </div>
 
+      {!ready && (
+        <div className="pointer-events-none absolute inset-0 z-[7]">
+          <Loader />
+        </div>
+      )}
       <Stick controls={controls} />
       <div className="absolute top-[calc(var(--safe-top)+60px)] right-4 z-10 flex flex-col items-end gap-2">
         <SceneButton

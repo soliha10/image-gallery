@@ -59,7 +59,7 @@ export function Grid() {
   }, [photos])
 
   return (
-    <div className="scroll-area no-scrollbar absolute inset-0 bg-bg px-3 pt-[calc(var(--safe-top)+64px)] pb-[calc(var(--safe-bottom)+96px)]">
+    <div className="scroll-area no-scrollbar starfield absolute inset-0 px-3 pt-[calc(var(--safe-top)+64px)] pb-[calc(var(--safe-bottom)+96px)]">
       <div className="flex items-start gap-2">
         {columns.map((column, c) => (
           <div key={c} className="flex min-w-0 flex-1 flex-col gap-2">

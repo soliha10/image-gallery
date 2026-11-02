@@ -17,26 +17,26 @@ export function CatGlyph({ className }: { className?: string }) {
 
 export function Loader() {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-4 bg-walnut text-amber" role="status">
+    <div className="flex h-full flex-col items-center justify-center gap-4 starfield text-gold" role="status">
       <CatGlyph className="w-20" />
       <div className="flex gap-3" aria-hidden>
         {[0, 1, 2].map((i) => (
           <span key={i} className="paw size-2.5 rounded-full bg-current" style={{ animationDelay: `${i * 0.14}s` }} />
         ))}
       </div>
-      <p className="text-sm text-paper/70">{t.loading}</p>
+      <p className="text-sm text-star/70">{t.loading}</p>
     </div>
   )
 }
 
 export function Message({ title, body, action }: { title: string; body: string; action?: () => void }) {
   return (
-    <div className="flex h-full flex-col items-center justify-center bg-walnut px-8 text-center text-paper">
-      <CatGlyph className="mb-6 w-28 text-amber" />
+    <div className="flex h-full flex-col items-center justify-center starfield px-8 text-center text-star">
+      <CatGlyph className="mb-6 w-28 text-gold" />
       <h1 className="font-display text-2xl leading-tight font-semibold">{title}</h1>
-      <p className="mt-3 max-w-72 text-sm leading-relaxed text-paper/70">{body}</p>
+      <p className="mt-3 max-w-72 text-sm leading-relaxed text-star/70">{body}</p>
       {action && (
-        <button onClick={action} className="mt-7 min-h-11 rounded-full bg-amber px-6 text-sm font-bold text-walnut">
+        <button onClick={action} className="mt-7 min-h-11 rounded-full bg-gold px-6 text-sm font-bold text-void">
           {t.retry}
         </button>
       )}

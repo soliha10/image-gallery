@@ -125,13 +125,13 @@ function eyeTexture() {
 }
 
 /** Light wrapping round the edge of the fur, which gives the soft plush look cheaply. */
-function plush<T extends THREE.MeshLambertMaterial>(material: T, strength = 0.24) {
+function plush<T extends THREE.MeshLambertMaterial>(material: T, strength = 0.42) {
   material.onBeforeCompile = (shader) => {
     shader.fragmentShader = shader.fragmentShader.replace(
       '#include <dithering_fragment>',
       `#include <dithering_fragment>
       float fringe = pow(1.0 - saturate(dot(normalize(vViewPosition), normal)), 2.4);
-      gl_FragColor.rgb += diffuseColor.rgb * 0.26 + fringe * vec3(1.0, 0.84, 0.62) * ${strength.toFixed(2)};`,
+      gl_FragColor.rgb += diffuseColor.rgb * 0.2 + fringe * vec3(0.6, 0.74, 1.0) * ${strength.toFixed(2)};`,
     )
   }
   return material
@@ -194,6 +194,37 @@ function eyeGeometry() {
   return geometry
 }
 
+const HELMET_RADIUS = 0.42
+
+/** Clear visor: only its edge and one small highlight catch light, so the face stays open. */
+function helmetMaterial() {
+  return new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    vertexShader: /* glsl */ `
+      varying vec3 vNormal;
+      varying vec3 vView;
+      void main() {
+        vec4 view = modelViewMatrix * vec4(position, 1.0);
+        vNormal = normalMatrix * normal;
+        vView = -view.xyz;
+        gl_Position = projectionMatrix * view;
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      varying vec3 vNormal;
+      varying vec3 vView;
+      void main() {
+        vec3 normal = normalize(vNormal);
+        vec3 view = normalize(vView);
+        float edge = pow(1.0 - max(dot(normal, view), 0.0), 3.0);
+        float glint = pow(max(dot(normal, normalize(vec3(-0.5, 0.65, 0.57))), 0.0), 90.0);
+        gl_FragColor = vec4(mix(vec3(0.68, 0.8, 1.0), vec3(1.0), glint), edge * 0.62 + glint * 0.7);
+      }
+    `,
+  })
+}
+
 const SMILE_ARC = Math.PI * 0.8
 
 /** Procedural kitten: every pose is computed from `walker` so no model file is shipped. */
@@ -217,8 +248,8 @@ export function Cat({ walker }: { walker: Walker }) {
       dark: new THREE.MeshBasicMaterial({ color: DARK }),
       shine: new THREE.MeshBasicMaterial({ color: '#ffffff' }),
       blush: new THREE.MeshBasicMaterial({ color: '#ff8f7a', transparent: true, opacity: 0.26, depthWrite: false }),
-      collar: new THREE.MeshLambertMaterial({ color: '#b5332e' }),
       gold: new THREE.MeshLambertMaterial({ color: '#e7bb52', emissive: '#6b4a10' }),
+      helmet: helmetMaterial(),
     }
   }, [])
 
@@ -230,7 +261,6 @@ export function Cat({ walker }: { walker: Walker }) {
   const eyeR = useRef<THREE.Group>(null!)
   const closedL = useRef<THREE.Mesh>(null!)
   const closedR = useRef<THREE.Mesh>(null!)
-  const bell = useRef<THREE.Group>(null!)
   const tail = useRef<(THREE.Group | null)[]>([])
   const legs = useRef<(THREE.Group | null)[]>([])
   const motion = useRef({ phase: 0, lean: 0, lookYaw: 0, lookPitch: 0 })
@@ -302,14 +332,12 @@ export function Cat({ walker }: { walker: Walker }) {
     eyeL.current.visible = eyeR.current.visible = !shut
     closedL.current.visible = closedR.current.visible = shut
 
-    bell.current.rotation.x = Math.sin(phase * 2) * 0.35 * moving
-
     tail.current.forEach((segment, i) => {
       if (!segment) return
-      const wave = Math.sin(t * (purr ? 9 : lerp(1.6, 4.5, moving)) - i * 0.42)
+      const wave = Math.sin(t * (purr ? 9 : lerp(1.1, 3.4, moving)) - i * 0.42)
       // Standing it rises in a happy curve; sitting it wraps round the paws.
       const wrap = sit * (1 - sleep) * 0.36
-      segment.rotation.y = wave * lerp(0.07, 0.15, moving) * (1 - sleep) * (1 - sit * 0.6) + wrap
+      segment.rotation.y = wave * lerp(0.11, 0.17, moving) * (1 - sleep) * (1 - sit * 0.6) + wrap
       segment.rotation.x = lerp(lerp(0.27 - i * 0.075, 0.08, run), 0.03, sit) + sleep * 0.05
     })
   })
@@ -342,17 +370,14 @@ export function Cat({ walker }: { walker: Walker }) {
           <TailChain shapes={shapes} materials={materials} tail={tail} index={0} />
         </group>
 
-        <group position={[0, 0.12, 0.39]} rotation={[Math.PI / 2 - 0.25, 0, 0]}>
-          <mesh material={materials.collar}>
-            <torusGeometry args={[0.133, 0.019, 10, 28]} />
-          </mesh>
-          <group ref={bell} position={[0, 0.142, 0.01]}>
-            <mesh geometry={shapes.ball} material={materials.gold} position={[0, 0, 0.022]} scale={0.034} />
-          </group>
-        </group>
-
         <group ref={head} position={[0, 0.2, 0.47]}>
           <mesh geometry={shapes.head} material={materials.head} scale={[0.235, 0.235, 0.235]} />
+          <mesh material={materials.helmet} position={[0, 0.06, 0.03]} renderOrder={4}>
+            <sphereGeometry args={[HELMET_RADIUS, 32, 24]} />
+          </mesh>
+          <mesh material={materials.gold} position={[0, -0.27, -0.08]} rotation={[Math.PI / 2 - 0.42, 0, 0]}>
+            <torusGeometry args={[0.215, 0.034, 10, 36]} />
+          </mesh>
           {/* Muzzle */}
           {[-1, 1].map((side) => (
             <mesh key={side} geometry={shapes.ball} material={materials.cream} position={[0.05 * side, -0.094, 0.19]} scale={[0.064, 0.052, 0.052]} />

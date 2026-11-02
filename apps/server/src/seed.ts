@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm'
-import { createDb } from './db'
+import { closeDb, createDb } from './db'
 import { albums, photos } from './db/schema'
 import { addPhoto } from './lib/photos'
 
@@ -44,6 +44,7 @@ const db = await createDb()
 const existing = await db.select({ id: photos.id }).from(photos).limit(1)
 if (existing.length > 0) {
   console.log('Gallery already has photos, skipping seed.')
+  await closeDb()
   process.exit(0)
 }
 
@@ -69,4 +70,5 @@ for (const [position, section] of [...CURATED.entries()].reverse()) {
   console.log(`${section.title}: ${added}`)
   if (added === 0) await db.delete(albums).where(eq(albums.id, album!.id))
 }
+await closeDb()
 process.exit(0)

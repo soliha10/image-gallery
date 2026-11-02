@@ -6,7 +6,11 @@ import { angleAt, indexForSlot, mod, SLOTS, WALL_RADIUS, type Walker } from './w
 
 const MAX_WIDTH = 1.42
 const MAX_HEIGHT = 1.95
-const FRAME = 0.09
+const FRAME = 0.045
+const HALO_MARGIN = 1.1
+const DRIFT = 0.05
+const STARS_PER_SLOT = 5
+const HALO_TINTS = ['#8f7cff', '#5fa0ff', '#f5c98a', '#c77ce0']
 export const PAINTING_Y = 1.85
 const FRAME_RADIUS = WALL_RADIUS - 0.16
 /** A little larger than a frame, so one at the edge of the screen counts as seen. */
@@ -64,22 +68,29 @@ class TextureCache {
   }
 }
 
-function glowTexture() {
+function haloTexture() {
   const canvas = document.createElement('canvas')
-  canvas.width = 128
-  canvas.height = 256
+  canvas.width = canvas.height = 128
   const c = canvas.getContext('2d')!
-  c.translate(64, 0)
-  c.scale(1, 2.4)
-  const light = c.createRadialGradient(0, 0, 0, 0, 0, 106)
-  light.addColorStop(0, 'rgba(255, 214, 150, .62)')
-  light.addColorStop(0.55, 'rgba(255, 190, 120, .2)')
-  light.addColorStop(1, 'rgba(255, 180, 110, 0)')
+  const light = c.createRadialGradient(64, 64, 18, 64, 64, 64)
+  light.addColorStop(0, 'rgba(255, 255, 255, .6)')
+  light.addColorStop(0.6, 'rgba(255, 255, 255, .2)')
+  light.addColorStop(1, 'rgba(255, 255, 255, 0)')
   c.fillStyle = light
-  c.fillRect(-64, 0, 128, 110)
+  c.fillRect(0, 0, 128, 128)
   const texture = new THREE.CanvasTexture(canvas)
   texture.colorSpace = THREE.SRGBColorSpace
   return texture
+}
+
+/** Small star figure for an empty frame: its stars and the lines between them share one buffer. */
+function constellationBuffer() {
+  let seed = 271
+  const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647
+  return Array.from({ length: SLOTS }, () => {
+    const points = Array.from({ length: STARS_PER_SLOT }, (_, i) => [(i / (STARS_PER_SLOT - 1) - 0.5) * 1.5 + random() * 0.2, (random() - 0.5) * 1.5] as const)
+    return points.slice(1).flatMap((point, i) => [points[i]!, point])
+  })
 }
 
 function clip(c: CanvasRenderingContext2D, text: string, width: number) {
@@ -92,16 +103,17 @@ function clip(c: CanvasRenderingContext2D, text: string, width: number) {
 function drawPlaque(canvas: HTMLCanvasElement, photo: Photo) {
   const c = canvas.getContext('2d')!
   const { width, height } = canvas
-  c.fillStyle = '#efe0bf'
+  c.clearRect(0, 0, width, height)
+  c.fillStyle = 'rgba(16, 18, 48, .92)'
   c.fillRect(0, 0, width, height)
-  c.strokeStyle = '#a57a35'
-  c.lineWidth = 6
-  c.strokeRect(5, 5, width - 10, height - 10)
-  c.fillStyle = '#2a1a12'
+  c.strokeStyle = 'rgba(244, 201, 93, .7)'
+  c.lineWidth = 3
+  c.strokeRect(3, 3, width - 6, height - 6)
+  c.fillStyle = '#eef0ff'
   c.textAlign = 'center'
   c.font = '600 42px Fraunces, Georgia, serif'
   c.fillText(clip(c, photo.title, width - 56), width / 2, 60)
-  c.fillStyle = '#6a4a30'
+  c.fillStyle = '#f4c95d'
   c.font = '500 27px Manrope, system-ui, sans-serif'
   c.fillText(clip(c, photo.credit ?? photo.description, width - 56), width / 2, 104)
 }
@@ -129,11 +141,13 @@ interface Props {
   walker: Walker
   photos: Photo[]
   textureWidth: 400 | 800
+  drift: boolean
+  starMap: THREE.Texture
 }
 
 const placement = new THREE.Object3D()
 
-export const Paintings = forwardRef<PaintingsHandle, Props>(function Paintings({ walker, photos, textureWidth }, ref) {
+export const Paintings = forwardRef<PaintingsHandle, Props>(function Paintings({ walker, photos, textureWidth, drift, starMap }, ref) {
   const camera = useThree((s) => s.camera)
   const blank = useMemo(() => new THREE.DataTexture(new Uint8Array([46, 32, 24, 255]), 1, 1), [])
   const cache = useMemo(() => new TextureCache(), [])
@@ -141,7 +155,6 @@ export const Paintings = forwardRef<PaintingsHandle, Props>(function Paintings({
   const photosRef = useRef(photos)
   const shownList = useRef<Photo[]>([])
   const glows = useRef<THREE.InstancedMesh>(null!)
-  const plaques = useRef<THREE.InstancedMesh>(null!)
   const label = useRef<THREE.Mesh>(null!)
   const labelFor = useRef<string | null>(null)
   photosRef.current = photos
@@ -150,9 +163,10 @@ export const Paintings = forwardRef<PaintingsHandle, Props>(function Paintings({
     () => ({
       plane: new THREE.PlaneGeometry(1, 1),
       box: new THREE.BoxGeometry(1, 1, 1),
-      frame: new THREE.MeshLambertMaterial({ color: '#c79a4b' }),
-      brass: new THREE.MeshLambertMaterial({ color: '#b48a3e' }),
-      glowMap: glowTexture(),
+      frame: new THREE.MeshBasicMaterial({ color: '#f6dfa8', toneMapped: false }),
+      haloMap: haloTexture(),
+      figures: constellationBuffer(),
+      sky: new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(SLOTS * (STARS_PER_SLOT - 1) * 2 * 3).fill(-999), 3)),
       frustum: new THREE.Frustum(),
       viewProjection: new THREE.Matrix4(),
       sphere: new THREE.Sphere(new THREE.Vector3(), VIEW_MARGIN),
@@ -191,8 +205,8 @@ export const Paintings = forwardRef<PaintingsHandle, Props>(function Paintings({
       parts.plane.dispose()
       parts.box.dispose()
       parts.frame.dispose()
-      parts.brass.dispose()
-      parts.glowMap.dispose()
+      parts.haloMap.dispose()
+      parts.sky.dispose()
       plaqueText.map.dispose()
       plaqueText.material.dispose()
       slotProps.forEach(({ material }) => material.dispose())
@@ -205,7 +219,7 @@ export const Paintings = forwardRef<PaintingsHandle, Props>(function Paintings({
     const none = new THREE.Matrix4().makeScale(0, 0, 0)
     for (let s = 0; s < SLOTS; s++) {
       glows.current.setMatrixAt(s, none)
-      plaques.current.setMatrixAt(s, none)
+      glows.current.setColorAt(s, new THREE.Color(HALO_TINTS[s % HALO_TINTS.length]))
     }
   }, [])
 
@@ -236,22 +250,39 @@ export const Paintings = forwardRef<PaintingsHandle, Props>(function Paintings({
   const placeExtras = (s: number, slot: Slot) => {
     const angle = angleAt(s)
     const hidden = !slot.group.visible
-    placement.position.set(Math.sin(angle) * (FRAME_RADIUS - 0.03), PAINTING_Y - 0.15, Math.cos(angle) * (FRAME_RADIUS - 0.03))
+    const y = slot.group.position.y
+    const sin = Math.sin(angle)
+    const cos = Math.cos(angle)
     placement.rotation.set(0, angle + Math.PI, 0)
-    placement.scale.setScalar(hidden ? 0 : 1).multiply(new THREE.Vector3(2.8, 3.1, 1))
+
+    placement.position.set(sin * (FRAME_RADIUS + 0.08), y, cos * (FRAME_RADIUS + 0.08))
+    placement.scale.set(hidden ? 0 : slot.width + HALO_MARGIN * 2, hidden ? 0 : slot.height + HALO_MARGIN * 2, 1)
     placement.updateMatrix()
     glows.current.setMatrixAt(s, placement.matrix)
 
-    placement.position.set(Math.sin(angle) * (FRAME_RADIUS - 0.04), PAINTING_Y - slot.height / 2 - FRAME - 0.13, Math.cos(angle) * (FRAME_RADIUS - 0.04))
-    placement.scale.set(hidden ? 0 : PLAQUE_WIDTH + 0.04, hidden ? 0 : PLAQUE_HEIGHT + 0.04, 0.02)
-    placement.updateMatrix()
-    plaques.current.setMatrixAt(s, placement.matrix)
+  }
+
+  /** Empty frames become a small constellation; used ones park their stars out of sight. */
+  const placeFigure = (s: number, hidden: boolean) => {
+    const angle = angleAt(s)
+    const buffer = parts.sky.getAttribute('position') as THREE.BufferAttribute
+    parts.figures[s]!.forEach(([along, up], i) => {
+      const index = s * (STARS_PER_SLOT - 1) * 2 + i
+      if (hidden) {
+        const x = Math.sin(angle) * FRAME_RADIUS + Math.cos(angle) * along
+        const z = Math.cos(angle) * FRAME_RADIUS - Math.sin(angle) * along
+        buffer.setXYZ(index, x, PAINTING_Y + up, z)
+      } else {
+        buffer.setXYZ(index, 0, -999, 0)
+      }
+    })
+    buffer.needsUpdate = true
   }
 
   const update = (delta: number, force = false) => {
     const list = photosRef.current
     const shown = shownList.current
-    // Appending a page keeps the walls as they are; a new filter replaces everything at once.
+    // Appending a page keeps the frames as they are; a new filter replaces everything at once.
     const replaced = force || list[0]?.id !== shown[0]?.id || list.length < shown.length
     shownList.current = list
 
@@ -259,9 +290,14 @@ export const Paintings = forwardRef<PaintingsHandle, Props>(function Paintings({
     parts.viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
     parts.frustum.setFromProjectionMatrix(parts.viewProjection)
 
-    let extrasMoved = false
+    let extrasMoved = drift
+    const time = performance.now() / 1000
     slots.current.forEach((slot, s) => {
       if (!slot) return
+      if (drift) {
+        slot.group.position.y = PAINTING_Y + Math.sin(time * 0.5 + s * 1.7) * DRIFT
+        if (slot.group.visible) placeExtras(s, slot)
+      }
       const wanted = indexForSlot(walker.pos, s, list.length)
       const photo = wanted === null ? null : list[mod(wanted, list.length)]!
       const changed = wanted !== slot.index || (photo?.id ?? null) !== slot.photoId
@@ -270,12 +306,13 @@ export const Paintings = forwardRef<PaintingsHandle, Props>(function Paintings({
         slot.index = wanted
         slot.group.visible = photo !== null
         slot.photoId = photo?.id ?? null
+        placeFigure(s, photo === null)
         if (photo) {
           const aspect = photo.width / photo.height
           slot.width = Math.min(MAX_WIDTH, MAX_HEIGHT * aspect)
           slot.height = slot.width / aspect
           slot.canvas.scale.set(slot.width, slot.height, 1)
-          slot.frame.scale.set(slot.width + FRAME * 2, slot.height + FRAME * 2, 0.1)
+          slot.frame.scale.set(slot.width + FRAME * 2, slot.height + FRAME * 2, 0.06)
           slot.material.map = blank
           slot.material.color.setScalar(1)
         }
@@ -297,7 +334,7 @@ export const Paintings = forwardRef<PaintingsHandle, Props>(function Paintings({
         if (slot.material.map === blank) slot.material.color.setScalar(0.25)
         slot.material.map = texture
       }
-      // Pictures near the cat are lit; the others rest in the room's warm dusk.
+      // Pictures near the cat are lit; the others rest in starlight.
       const lit = slot.material.map === blank ? 1 : 1 - Math.min(Math.abs(along) / 4, 1) * 0.22
       const value = slot.material.color.r + (lit - slot.material.color.r) * (1 - Math.exp(-delta * 6))
       slot.material.color.setScalar(value)
@@ -305,7 +342,7 @@ export const Paintings = forwardRef<PaintingsHandle, Props>(function Paintings({
 
     if (extrasMoved) {
       glows.current.instanceMatrix.needsUpdate = true
-      plaques.current.instanceMatrix.needsUpdate = true
+      if (glows.current.instanceColor) glows.current.instanceColor.needsUpdate = true
     }
 
     const nearest = walker.nearestSlot
@@ -323,6 +360,7 @@ export const Paintings = forwardRef<PaintingsHandle, Props>(function Paintings({
     const showLabel = close && labelFor.current === photo!.id
     plaqueText.material.opacity += ((showLabel ? 1 : 0) - plaqueText.material.opacity) * (1 - Math.exp(-delta * 8))
     label.current.visible = plaqueText.material.opacity > 0.01
+    if (slot && labelFor.current === photo?.id) label.current.position.y = slot.group.position.y - slot.height / 2 - FRAME - 0.13
   }
 
   useFrame((_, delta) => update(delta))
@@ -330,9 +368,14 @@ export const Paintings = forwardRef<PaintingsHandle, Props>(function Paintings({
   return (
     <>
       <instancedMesh ref={glows} args={[parts.plane, undefined, SLOTS]} frustumCulled={false} renderOrder={1}>
-        <meshBasicMaterial map={parts.glowMap} transparent depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
+        <meshBasicMaterial map={parts.haloMap} opacity={0.42} transparent depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
       </instancedMesh>
-      <instancedMesh ref={plaques} args={[parts.box, parts.brass, SLOTS]} frustumCulled={false} />
+      <lineSegments geometry={parts.sky} frustumCulled={false}>
+        <lineBasicMaterial color="#8fa6ff" transparent opacity={0.4} depthWrite={false} />
+      </lineSegments>
+      <points geometry={parts.sky} frustumCulled={false}>
+        <pointsMaterial map={starMap} color="#f4e8c8" size={0.13} transparent opacity={0.95} depthWrite={false} />
+      </points>
       <mesh ref={label} geometry={parts.plane} material={plaqueText.material} scale={[PLAQUE_WIDTH, PLAQUE_HEIGHT, 1]} visible={false} renderOrder={2} />
       {slotProps.map(({ slot, angle, position, material }) => (
         <group
@@ -356,7 +399,7 @@ export const Paintings = forwardRef<PaintingsHandle, Props>(function Paintings({
           }}
         >
           <mesh geometry={parts.box} material={parts.frame} />
-          <mesh geometry={parts.plane} material={material} position={[0, 0, 0.056]} />
+          <mesh geometry={parts.plane} material={material} position={[0, 0, 0.036]} />
         </group>
       ))}
     </>
