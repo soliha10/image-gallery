@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { normalizeAppLink } from '@gallery/shared'
 import { z } from 'zod'
 
@@ -39,6 +40,17 @@ if (parsed.NODE_ENV === 'production' && parsed.PUBLIC_URL && !parsed.BOT_WEBHOOK
 }
 
 export const env = parsed
+
+/**
+ * Telegram accepts only A-Z, a-z, 0-9, _ and - in a webhook secret, while generated values (Render's
+ * among them) may hold + / =. Such a secret is turned into its SHA-256 hex, which Telegram accepts and
+ * which stays the same on every start, so registering and checking the webhook always agree.
+ */
+export const webhookSecret = parsed.BOT_WEBHOOK_SECRET
+  ? /^[A-Za-z0-9_-]{1,256}$/.test(parsed.BOT_WEBHOOK_SECRET)
+    ? parsed.BOT_WEBHOOK_SECRET
+    : createHash('sha256').update(parsed.BOT_WEBHOOK_SECRET).digest('hex')
+  : undefined
 
 /**
  * Optional, so a mistyped value must never stop the server: it is cleaned up, and if still unusable

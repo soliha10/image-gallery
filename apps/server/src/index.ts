@@ -3,7 +3,7 @@ import { buildApp } from './app'
 import { configureBot, createBot } from './bot'
 import { DEV_USER } from './auth'
 import { closeDb, createDb } from './db'
-import { devAuthEnabled, env } from './env'
+import { devAuthEnabled, env, webhookSecret } from './env'
 import { claimUnowned } from './lib/photos'
 
 if (env.SENTRY_DSN) Sentry.init({ dsn: env.SENTRY_DSN, environment: env.NODE_ENV })
@@ -21,12 +21,13 @@ if (bot) {
   if (env.PUBLIC_URL) {
     await bot.api
       .setWebhook(`${env.PUBLIC_URL}/telegram/webhook`, {
-        secret_token: env.BOT_WEBHOOK_SECRET,
-        allowed_updates: ['message'],
+        secret_token: webhookSecret,
+        allowed_updates: ['message', 'callback_query', 'inline_query'],
       })
+      .then(() => app.log.info('telegram webhook set'))
       .catch((error) => app.log.error(error, 'webhook not set'))
   } else {
-    bot.start({ allowed_updates: ['message'] }).catch((error) => app.log.error(error, 'bot polling stopped'))
+    bot.start({ allowed_updates: ['message', 'callback_query', 'inline_query'] }).catch((error) => app.log.error(error, 'bot polling stopped'))
   }
   if (env.MINI_APP_URL) {
     await bot.api

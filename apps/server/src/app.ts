@@ -10,7 +10,7 @@ import Fastify from 'fastify'
 import { webhookCallback, type Bot } from 'grammy'
 import { ZodError } from 'zod'
 import type { Db } from './db'
-import { env } from './env'
+import { env, webhookSecret } from './env'
 import { localMediaRoot, usesLocalStorage } from './lib/storage'
 import { apiRoutes } from './routes/api'
 
@@ -47,7 +47,7 @@ export async function buildApp(db: Db, bot: Bot | null) {
   if (bot && env.PUBLIC_URL) {
     // Waking from sleep and resizing a photo can outlast the default limit, and Telegram would then resend.
     const handle = webhookCallback(bot, 'fastify', {
-      secretToken: env.BOT_WEBHOOK_SECRET,
+      secretToken: webhookSecret,
       onTimeout: 'return',
       timeoutMilliseconds: 25_000,
     })

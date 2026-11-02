@@ -40,3 +40,24 @@ describe('server start', () => {
     expect(warn).toHaveBeenCalled()
   })
 })
+
+describe('webhook secret', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.resetModules()
+  })
+
+  it('turns a generated secret with + / = into one Telegram accepts, the same every start', async () => {
+    vi.stubEnv('BOT_WEBHOOK_SECRET', 'Ab+c/d=e==')
+    const first = (await import('./env')).webhookSecret
+    vi.resetModules()
+    const second = (await import('./env')).webhookSecret
+    expect(first).toMatch(/^[A-Za-z0-9_-]{1,256}$/)
+    expect(first).toBe(second)
+  })
+
+  it('keeps a secret that is already valid', async () => {
+    vi.stubEnv('BOT_WEBHOOK_SECRET', 'plain_secret-123')
+    expect((await import('./env')).webhookSecret).toBe('plain_secret-123')
+  })
+})

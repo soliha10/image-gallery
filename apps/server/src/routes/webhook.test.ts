@@ -5,9 +5,11 @@ import type { FastifyInstance } from 'fastify'
 import { Bot } from 'grammy'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
-const SECRET = 'webhook-secret'
+// Shaped like Render's generated values, which Telegram would refuse as they are.
+const SECRET = 'Ab+c/d=e=='
 
 let app: FastifyInstance
+let derived: string
 
 beforeAll(async () => {
   const dir = mkdtempSync(join(tmpdir(), 'gallery-'))
@@ -18,6 +20,7 @@ beforeAll(async () => {
   vi.stubEnv('STORAGE_DIR', join(dir, 'media'))
   const { createDb } = await import('../db')
   const { buildApp } = await import('../app')
+  derived = (await import('../env')).webhookSecret!
   const bot = new Bot('123:abc', {
     botInfo: {
       id: 123,
@@ -53,7 +56,9 @@ describe('telegram webhook', () => {
     expect((await post()).statusCode).toBe(401)
     expect((await post('nope')).statusCode).toBe(401)
   })
-  it('accepts the configured secret', async () => {
-    expect((await post(SECRET)).statusCode).toBe(200)
+  it('accepts the Telegram-safe form of the configured secret, which is what Telegram sends', async () => {
+    expect(derived).not.toBe(SECRET)
+    expect((await post(derived)).statusCode).toBe(200)
+    expect((await post(SECRET)).statusCode).toBe(401)
   })
 })
