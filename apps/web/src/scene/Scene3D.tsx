@@ -1,16 +1,18 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { Loader } from '../components/States'
 import { t } from '../lib/i18n'
 import { haptic } from '../lib/telegram'
 import { useStore, type Rect } from '../lib/store'
 import { sceneBridge } from './bridge'
 import { Cat } from './Cat'
 import { Controls, type StickView } from './controls'
-import { Cosmos } from './Cosmos'
+import { Cosmos, softDot } from './Cosmos'
 import { FrameBudget } from './frameBudget'
 import { Paintings, type PaintingsHandle } from './Paintings'
 import { device, EFFECTS, lowerQuality, nextQuality, pixelRatioFor, savedQuality, saveQuality, startingQuality, type Quality } from './quality'
+import { Trail } from './Trail'
 import { angleAt, clamp, mod, resolve, SLOTS, slotOfIndex, Walker, WALL_RADIUS, wrapAngle } from './walker'
 
 const CAMERA_LIMIT = WALL_RADIUS - 0.7
@@ -21,6 +23,11 @@ const PITCH_MIN = 0.1
 const PITCH_MAX = 0.75
 const GUIDE_KEY = 'scene-guide-seen'
 const DPR_STEPS = [600, 1400, 2400]
+const INTRO_TIME = 1.8
+const INTRO_HEIGHT = 9
+
+/** The arrival plays once per visit, not every time the viewer comes back from the grid. */
+let introPlayed = false
 
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
 const QUALITY_LABELS: Record<Quality, string> = { low: t.qualityLow, medium: t.qualityMedium, high: t.qualityHigh }
@@ -41,7 +48,7 @@ function markGuideSeen() {
   }
 }
 
-function Dust() {
+function Dust({ map }: { map: THREE.Texture }) {
   const geometry = useMemo(() => {
     const points = new Float32Array(90 * 3)
     for (let i = 0; i < points.length; i += 3) {
@@ -62,7 +69,7 @@ function Dust() {
   })
   return (
     <points ref={ref} geometry={geometry} frustumCulled={false}>
-      <pointsMaterial color="#cfd8ff" size={0.018} transparent opacity={0.3} depthWrite={false} />
+      <pointsMaterial map={map} color="#cfd8ff" size={0.03} transparent opacity={0.35} depthWrite={false} />
     </points>
   )
 }
@@ -80,19 +87,24 @@ interface DirectorProps {
   onSlow: () => void
   onUnusable: () => void
   onTouring: (touring: boolean) => void
+  onReady: () => void
+  intro: React.RefObject<number>
+  drop: React.RefObject<number>
   autopilot: boolean
 }
 
 /** Moves the cat, camera and key light; all per-frame work bypasses React. */
-function Director({ walker, controls, paintings, cat, shadow, light, pendingOpen, onOpen, onResume, onSlow, onUnusable, onTouring, autopilot }: DirectorProps) {
+function Director({ walker, controls, paintings, cat, shadow, light, pendingOpen, onOpen, onResume, onSlow, onUnusable, onTouring, onReady, intro, drop, autopilot }: DirectorProps) {
   const size = useThree((s) => s.size)
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera
-  const start = { orbit: Math.PI, pitch: 0.3, view: 1, slot: 0, focusX: walker.x, focusZ: walker.z, followAfter: 0, distance: 3.2 }
+  const arriving = intro.current > 0
+  const start = { orbit: arriving ? 0.5 : Math.PI, pitch: arriving ? 0.2 : 0.3, view: arriving ? 0 : 1, slot: 0, focusX: walker.x, focusZ: walker.z, followAfter: 0, distance: 3.2 }
   const state = useRef(start)
   const setCurrentIndex = useStore((s) => s.setCurrentIndex)
   const photos = useStore((s) => s.photos)
   const lastIndex = useRef<number | null>(null)
   const touring = useRef(false)
+  const first = useRef(true)
   const budget = useMemo(() => new FrameBudget(), [])
   const look = useMemo(() => ({ orbit: new THREE.Vector3(), target: new THREE.Vector3(), view: new THREE.Vector3(), viewTarget: new THREE.Vector3() }), [])
 
@@ -106,11 +118,12 @@ function Director({ walker, controls, paintings, cat, shadow, light, pendingOpen
   const placeCamera = (time: number) => {
     const s = state.current
     const eased = s.view * s.view * (3 - 2 * s.view)
-    const flat = Math.cos(s.pitch) * s.distance
-    look.orbit.set(s.focusX + Math.sin(s.orbit) * flat, 0.55 + Math.sin(s.pitch) * s.distance, s.focusZ + Math.cos(s.orbit) * flat)
+    const distance = s.distance + (intro.current / INTRO_TIME) * 2.4
+    const flat = Math.cos(s.pitch) * distance
+    look.orbit.set(s.focusX + Math.sin(s.orbit) * flat, 0.55 + Math.sin(s.pitch) * distance, s.focusZ + Math.cos(s.orbit) * flat)
     const reach = Math.hypot(look.orbit.x, look.orbit.z)
     if (reach > CAMERA_LIMIT) look.orbit.multiplyScalar(CAMERA_LIMIT / reach).setY(look.orbit.y)
-    look.target.set(s.focusX, 0.7, s.focusZ)
+    look.target.set(s.focusX, 0.7 + drop.current * 0.5, s.focusZ)
 
     const angle = angleAt(s.slot)
     const drift = reducedMotion ? 0 : Math.sin(time * 0.25) * 0.015
@@ -184,12 +197,23 @@ function Director({ walker, controls, paintings, cat, shadow, light, pendingOpen
   }, [controls])
 
   useFrame(({ clock }, rawDelta) => {
+    if (first.current) {
+      first.current = false
+      onReady()
+    }
     const verdict = budget.sample(rawDelta)
     if (verdict === 'slow') onSlow()
     if (verdict === 'unusable') onUnusable()
 
     const dt = Math.min(rawDelta, 0.05)
     const s = state.current
+    if (intro.current > 0) {
+      intro.current = Math.max(intro.current - dt, 0)
+      const left = intro.current / INTRO_TIME
+      drop.current = INTRO_HEIGHT * left * left * left
+    }
+    const arrived = intro.current === 0
+    if (arrived) drop.current = 0
     const time = clock.elapsedTime
 
     if (controls.lookX !== 0 || controls.lookY !== 0) {
@@ -228,13 +252,13 @@ function Director({ walker, controls, paintings, cat, shadow, light, pendingOpen
     const opening = pendingOpen.current !== null && walker.arrived
     const lightboxOpen = useStore.getState().lightbox !== null
     if (walker.viewing !== null) s.slot = walker.viewing
-    const framed = opening || lightboxOpen || walker.viewing !== null
+    const framed = arrived && (opening || lightboxOpen || walker.viewing !== null)
     if (framed) s.orbit += wrapAngle(angleAt(s.slot) + Math.PI - s.orbit) * (1 - Math.exp(-dt * 3))
     s.view = clamp(s.view + ((framed ? 1 : -1) * dt) / (opening ? 0.42 : 1.1), 0, 1)
     placeCamera(time)
 
     if (cat.current && shadow.current) {
-      cat.current.position.set(walker.x, 0, walker.z)
+      cat.current.position.set(walker.x, drop.current, walker.z)
       cat.current.rotation.y = walker.heading
       shadow.current.position.set(walker.x, 0.015, walker.z)
     }
@@ -354,6 +378,8 @@ export default function Scene3D() {
   const shadow = useRef<THREE.Mesh>(null)
   const light = useRef<THREE.PointLight>(null)
   const pendingOpen = useRef<number | null>(null)
+  const drop = useRef(0)
+  const intro = useRef(reducedMotion || introPlayed || useStore.getState().lightbox ? 0 : INTRO_TIME)
   const three = useRef<{ camera: THREE.Camera } | null>(null)
   const raycaster = useMemo(() => new THREE.Raycaster(), [])
 
@@ -368,8 +394,10 @@ export default function Scene3D() {
   const [visible, setVisible] = useState(!document.hidden)
   const [settled, setSettled] = useState(false)
   const [touring, setTouring] = useState(false)
-  const [guide, setGuide] = useState(() => !guideSeen())
+  const [guide, setGuide] = useState(false)
+  const [ready, setReady] = useState(false)
   const effects = EFFECTS[quality]
+  const shadowMap = useMemo(() => softDot('rgba(255,255,255,.95)', 'rgba(255,255,255,.7)'), [])
 
   // Sharpness arrives in steps after the room is up, so opening stays quick.
   useEffect(() => {
@@ -379,6 +407,13 @@ export default function Scene3D() {
     )
     return () => timers.forEach(clearTimeout)
   }, [quality])
+
+  useEffect(() => {
+    introPlayed = true
+    if (guideSeen()) return
+    const timer = setTimeout(() => setGuide(true), intro.current > 0 ? 2200 : 300)
+    return () => clearTimeout(timer)
+  }, [])
 
   useEffect(() => {
     const onVisibility = () => setVisible(!document.hidden)
@@ -402,10 +437,15 @@ export default function Scene3D() {
 
   useEffect(() => {
     controls.onActive = () => {
+      intro.current = 0
       walker.wake()
       setGuide(false)
     }
     controls.onTap = (x, y) => {
+      if (intro.current > 0) {
+        intro.current = 0
+        return
+      }
       const element = three.current ? (document.querySelector('[data-scene]') as HTMLElement | null) : null
       if (!element || !three.current) return
       const ndc = new THREE.Vector2((x / element.clientWidth) * 2 - 1, -(y / element.clientHeight) * 2 + 1)
@@ -480,7 +520,7 @@ export default function Scene3D() {
           <pointLight ref={light} color="#fff0dc" intensity={8} distance={8} decay={1.5} />
 
           <Cosmos walker={walker} effects={effects} calm={reducedMotion} />
-          <Paintings ref={paintings} walker={walker} photos={photos} textureWidth={effects.textureWidth} drift={effects.drift && !reducedMotion} />
+          <Paintings ref={paintings} walker={walker} photos={photos} textureWidth={effects.textureWidth} drift={effects.drift && !reducedMotion} starMap={shadowMap} />
 
           <group ref={cat}>
             <Cat walker={walker} />
@@ -488,11 +528,12 @@ export default function Scene3D() {
               <sphereGeometry args={[0.65, 8, 8]} />
             </mesh>
           </group>
-          <mesh ref={shadow} rotation={[-Math.PI / 2, 0, 0]}>
-            <circleGeometry args={[0.46, 24]} />
-            <meshBasicMaterial color="#02030f" transparent opacity={0.55} depthWrite={false} />
+          <mesh ref={shadow} rotation={[-Math.PI / 2, 0, 0]} renderOrder={1}>
+            <planeGeometry args={[1.5, 1.5]} />
+            <meshBasicMaterial map={shadowMap} color="#02030f" transparent depthWrite={false} toneMapped={false} />
           </mesh>
-          {!reducedMotion && effects.drift && <Dust />}
+          {!reducedMotion && effects.drift && <Dust map={shadowMap} />}
+          {!reducedMotion && effects.trail && <Trail walker={walker} drop={drop} map={shadowMap} />}
 
           <Director
             walker={walker}
@@ -505,6 +546,9 @@ export default function Scene3D() {
             autopilot={!lightboxOpen}
             onResume={() => setSettled(false)}
             onTouring={setTouring}
+            onReady={() => setReady(true)}
+            intro={intro}
+            drop={drop}
             onSlow={() => {
               if (quality !== 'low') changeQuality(lowerQuality(quality), false)
               else setDpr(1)
@@ -522,6 +566,11 @@ export default function Scene3D() {
         </Canvas>
       </div>
 
+      {!ready && (
+        <div className="pointer-events-none absolute inset-0 z-[7]">
+          <Loader />
+        </div>
+      )}
       <Stick controls={controls} />
       <div className="absolute top-[calc(var(--safe-top)+60px)] right-4 z-10 flex flex-col items-end gap-2">
         <SceneButton

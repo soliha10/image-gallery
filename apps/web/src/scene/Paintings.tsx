@@ -142,11 +142,12 @@ interface Props {
   photos: Photo[]
   textureWidth: 400 | 800
   drift: boolean
+  starMap: THREE.Texture
 }
 
 const placement = new THREE.Object3D()
 
-export const Paintings = forwardRef<PaintingsHandle, Props>(function Paintings({ walker, photos, textureWidth, drift }, ref) {
+export const Paintings = forwardRef<PaintingsHandle, Props>(function Paintings({ walker, photos, textureWidth, drift, starMap }, ref) {
   const camera = useThree((s) => s.camera)
   const blank = useMemo(() => new THREE.DataTexture(new Uint8Array([46, 32, 24, 255]), 1, 1), [])
   const cache = useMemo(() => new TextureCache(), [])
@@ -154,7 +155,6 @@ export const Paintings = forwardRef<PaintingsHandle, Props>(function Paintings({
   const photosRef = useRef(photos)
   const shownList = useRef<Photo[]>([])
   const glows = useRef<THREE.InstancedMesh>(null!)
-  const plaques = useRef<THREE.InstancedMesh>(null!)
   const label = useRef<THREE.Mesh>(null!)
   const labelFor = useRef<string | null>(null)
   photosRef.current = photos
@@ -164,7 +164,6 @@ export const Paintings = forwardRef<PaintingsHandle, Props>(function Paintings({
       plane: new THREE.PlaneGeometry(1, 1),
       box: new THREE.BoxGeometry(1, 1, 1),
       frame: new THREE.MeshBasicMaterial({ color: '#f6dfa8', toneMapped: false }),
-      glass: new THREE.MeshBasicMaterial({ color: '#191c4c', transparent: true, opacity: 0.8, toneMapped: false }),
       haloMap: haloTexture(),
       figures: constellationBuffer(),
       sky: new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(SLOTS * (STARS_PER_SLOT - 1) * 2 * 3).fill(-999), 3)),
@@ -206,7 +205,6 @@ export const Paintings = forwardRef<PaintingsHandle, Props>(function Paintings({
       parts.plane.dispose()
       parts.box.dispose()
       parts.frame.dispose()
-      parts.glass.dispose()
       parts.haloMap.dispose()
       parts.sky.dispose()
       plaqueText.map.dispose()
@@ -221,7 +219,6 @@ export const Paintings = forwardRef<PaintingsHandle, Props>(function Paintings({
     const none = new THREE.Matrix4().makeScale(0, 0, 0)
     for (let s = 0; s < SLOTS; s++) {
       glows.current.setMatrixAt(s, none)
-      plaques.current.setMatrixAt(s, none)
       glows.current.setColorAt(s, new THREE.Color(HALO_TINTS[s % HALO_TINTS.length]))
     }
   }, [])
@@ -263,10 +260,6 @@ export const Paintings = forwardRef<PaintingsHandle, Props>(function Paintings({
     placement.updateMatrix()
     glows.current.setMatrixAt(s, placement.matrix)
 
-    placement.position.set(sin * (FRAME_RADIUS - 0.04), y - slot.height / 2 - FRAME - 0.13, cos * (FRAME_RADIUS - 0.04))
-    placement.scale.set(hidden ? 0 : PLAQUE_WIDTH + 0.04, hidden ? 0 : PLAQUE_HEIGHT + 0.04, 0.02)
-    placement.updateMatrix()
-    plaques.current.setMatrixAt(s, placement.matrix)
   }
 
   /** Empty frames become a small constellation; used ones park their stars out of sight. */
@@ -350,7 +343,6 @@ export const Paintings = forwardRef<PaintingsHandle, Props>(function Paintings({
     if (extrasMoved) {
       glows.current.instanceMatrix.needsUpdate = true
       if (glows.current.instanceColor) glows.current.instanceColor.needsUpdate = true
-      plaques.current.instanceMatrix.needsUpdate = true
     }
 
     const nearest = walker.nearestSlot
@@ -376,14 +368,13 @@ export const Paintings = forwardRef<PaintingsHandle, Props>(function Paintings({
   return (
     <>
       <instancedMesh ref={glows} args={[parts.plane, undefined, SLOTS]} frustumCulled={false} renderOrder={1}>
-        <meshBasicMaterial map={parts.haloMap} opacity={0.5} transparent depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
+        <meshBasicMaterial map={parts.haloMap} opacity={0.42} transparent depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
       </instancedMesh>
-      <instancedMesh ref={plaques} args={[parts.box, parts.glass, SLOTS]} frustumCulled={false} />
       <lineSegments geometry={parts.sky} frustumCulled={false}>
         <lineBasicMaterial color="#8fa6ff" transparent opacity={0.4} depthWrite={false} />
       </lineSegments>
       <points geometry={parts.sky} frustumCulled={false}>
-        <pointsMaterial color="#f4e8c8" size={0.07} transparent opacity={0.95} depthWrite={false} />
+        <pointsMaterial map={starMap} color="#f4e8c8" size={0.13} transparent opacity={0.95} depthWrite={false} />
       </points>
       <mesh ref={label} geometry={parts.plane} material={plaqueText.material} scale={[PLAQUE_WIDTH, PLAQUE_HEIGHT, 1]} visible={false} renderOrder={2} />
       {slotProps.map(({ slot, angle, position, material }) => (

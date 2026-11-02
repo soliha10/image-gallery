@@ -47,7 +47,7 @@ function bakeSky(width: number) {
   return paint(width, height, (c) => {
     const base = c.createLinearGradient(0, 0, 0, height)
     base.addColorStop(0, '#05061a')
-    base.addColorStop(0.5, '#0b0c28')
+    base.addColorStop(0.5, '#080920')
     base.addColorStop(1, '#05061a')
     c.fillStyle = base
     c.fillRect(0, 0, width, height)
@@ -57,22 +57,22 @@ function bakeSky(width: number) {
     c.globalCompositeOperation = 'lighter'
     for (let i = 0; i < 420; i++) {
       const x = random() * width
-      blob(c, width, x, bandY(x) + gauss() * 150 * unit, (70 + random() * 120) * unit, colors[Math.floor(random() * colors.length)]!, 0.07)
+      blob(c, width, x, bandY(x) + gauss() * 105 * unit, (50 + random() * 90) * unit, colors[Math.floor(random() * colors.length)]!, 0.05)
     }
     // The bright core sits on one side of the sky, away from the opening view of a painting.
-    for (let i = 0; i < 120; i++) {
-      const x = width * 0.72 + gauss() * 420 * unit
-      blob(c, width, x, bandY(x) + gauss() * 70 * unit, (30 + random() * 70) * unit, i % 3 ? '#ffd9a8' : '#ffb6c9', 0.09)
+    for (let i = 0; i < 170; i++) {
+      const x = width * 0.72 + gauss() * 520 * unit
+      blob(c, width, x, bandY(x) + gauss() * 62 * unit, (24 + random() * 60) * unit, i % 3 ? '#ffd9a8' : '#ffb6c9', 0.13)
     }
     c.globalCompositeOperation = 'source-over'
-    for (let i = 0; i < 170; i++) {
+    for (let i = 0; i < 240; i++) {
       const x = random() * width
-      blob(c, width, x, bandY(x) + gauss() * 46 * unit, (16 + random() * 44) * unit, '#050514', 0.3)
+      blob(c, width, x, bandY(x) + gauss() * 34 * unit, (10 + random() * 34) * unit, '#050514', 0.42)
     }
     c.globalCompositeOperation = 'lighter'
-    for (let i = 0; i < 2600; i++) {
+    for (let i = 0; i < 4200; i++) {
       const x = random() * width
-      const near = random() > 0.45
+      const near = random() > 0.3
       const y = near ? bandY(x) + gauss() * 190 * unit : random() * height
       c.fillStyle = `rgba(235, 238, 255, ${0.15 + random() * 0.55})`
       const size = (random() > 0.97 ? 2 : 1) * Math.max(unit, 0.7)
@@ -82,7 +82,7 @@ function bakeSky(width: number) {
   })
 }
 
-function softDot(inner: string, outer: string) {
+export function softDot(inner: string, outer: string) {
   return paint(256, 256, (c) => {
     const gradient = c.createRadialGradient(128, 128, 0, 128, 128, 128)
     gradient.addColorStop(0, inner)
@@ -132,7 +132,7 @@ const STAR_FRAGMENT = /* glsl */ `
   varying vec3 vTint;
   varying float vGlow;
   void main() {
-    float fade = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
+    float fade = 1.0 - smoothstep(0.05, 0.5, length(gl_PointCoord - 0.5));
     gl_FragColor = vec4(vTint * vGlow * fade, fade);
   }
 `
@@ -209,7 +209,7 @@ function Nebulae({ count }: { count: number }) {
     <>
       {NEBULAE.slice(0, count).map(({ position, scale, color }) => (
         <sprite key={color + scale} position={position} scale={[scale, scale, 1]} renderOrder={-8}>
-          <spriteMaterial map={map} color={color} opacity={0.26} transparent depthWrite={false} fog={false} blending={THREE.AdditiveBlending} />
+          <spriteMaterial map={map} color={color} opacity={0.09} transparent depthWrite={false} fog={false} blending={THREE.AdditiveBlending} />
         </sprite>
       ))}
     </>
@@ -328,16 +328,15 @@ function Heart() {
 
 function floorTexture() {
   const size = 1024
-  const random = seeded(12)
   return paint(size, size, (c) => {
     const mid = size / 2
     const scale = mid / FLOOR_RADIUS
     c.translate(mid, mid)
     const glass = c.createRadialGradient(0, 0, 0, 0, 0, mid)
-    glass.addColorStop(0, 'rgba(70, 80, 170, .5)')
-    glass.addColorStop(0.72, 'rgba(50, 60, 150, .34)')
-    glass.addColorStop(0.97, 'rgba(100, 120, 230, .5)')
-    glass.addColorStop(1, 'rgba(120, 140, 255, .1)')
+    glass.addColorStop(0, 'rgba(62, 72, 160, .3)')
+    glass.addColorStop(0.72, 'rgba(36, 44, 118, .2)')
+    glass.addColorStop(0.97, 'rgba(90, 110, 220, .34)')
+    glass.addColorStop(1, 'rgba(120, 140, 255, .06)')
     c.fillStyle = glass
     c.beginPath()
     c.arc(0, 0, mid, 0, Math.PI * 2)
@@ -363,14 +362,8 @@ function floorTexture() {
       c.stroke()
       c.fillStyle = 'rgba(244, 201, 93, .8)'
       c.beginPath()
-      c.arc(x * 7.05, y * 7.05, 5, 0, Math.PI * 2)
+      c.arc(x * 7.05, y * 7.05, 3.5, 0, Math.PI * 2)
       c.fill()
-    }
-    c.fillStyle = 'rgba(235, 240, 255, .55)'
-    for (let i = 0; i < 260; i++) {
-      const radius = (2.2 + random() * 6) * scale
-      const angle = random() * Math.PI * 2
-      c.fillRect(Math.cos(angle) * radius, Math.sin(angle) * radius, 1.6, 1.6)
     }
   })
 }
@@ -426,7 +419,7 @@ function Asteroids({ count }: { count: number }) {
     const place = new THREE.Object3D()
     for (let i = 0; i < count; i++) {
       const angle = random() * Math.PI * 2
-      const radius = 15 + random() * 13
+      const radius = 19 + random() * 13
       place.position.set(Math.cos(angle) * radius, -7 + random() * 12, Math.sin(angle) * radius)
       place.rotation.set(random() * 6, random() * 6, random() * 6)
       place.scale.set(0.12 + random() * 0.4, 0.1 + random() * 0.3, 0.12 + random() * 0.35)
@@ -442,7 +435,7 @@ function Asteroids({ count }: { count: number }) {
     <group ref={belt}>
       <instancedMesh ref={ref} args={[undefined, undefined, count]} frustumCulled={false}>
         <icosahedronGeometry args={[1, 0]} />
-        <meshLambertMaterial color="#6f6a86" flatShading />
+        <meshLambertMaterial color="#514d68" flatShading />
       </instancedMesh>
     </group>
   )
