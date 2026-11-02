@@ -16,8 +16,6 @@ interface BottomButton {
 interface WebApp {
   initData: string
   initDataUnsafe: { start_param?: string; user?: { language_code?: string } }
-  colorScheme: 'light' | 'dark'
-  themeParams: Record<string, string | undefined>
   safeAreaInset?: Insets
   contentSafeAreaInset?: Insets
   platform: string
@@ -55,26 +53,6 @@ export const tg = app?.initData ? app : undefined
 
 const supports = (version: string) => tg?.isVersionAtLeast(version) ?? false
 
-const THEME_TOKENS: Record<string, string> = {
-  bg_color: '--tg-bg',
-  secondary_bg_color: '--tg-surface',
-  text_color: '--tg-text',
-  hint_color: '--tg-hint',
-  button_color: '--tg-accent',
-  button_text_color: '--tg-on-accent',
-  destructive_text_color: '--tg-danger',
-}
-
-function applyTheme() {
-  if (!tg) return
-  const root = document.documentElement
-  root.dataset.scheme = tg.colorScheme
-  for (const [key, token] of Object.entries(THEME_TOKENS)) {
-    const value = tg.themeParams[key]
-    if (value) root.style.setProperty(token, value)
-  }
-}
-
 function applySafeArea() {
   if (!tg) return
   const root = document.documentElement.style
@@ -86,18 +64,15 @@ function applySafeArea() {
 }
 
 export function initTelegram() {
-  document.documentElement.dataset.scheme = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
   if (!tg) return
   tg.ready()
   tg.expand()
-  applyTheme()
   applySafeArea()
-  tg.onEvent('themeChanged', applyTheme)
   for (const event of ['safeAreaChanged', 'contentSafeAreaChanged', 'fullscreenChanged']) tg.onEvent(event, applySafeArea)
   if (supports('7.7')) tg.disableVerticalSwipes()
   if (supports('7.10')) {
-    tg.setHeaderColor('#1b0f0a')
-    tg.setBackgroundColor('#1b0f0a')
+    tg.setHeaderColor('#090a1c')
+    tg.setBackgroundColor('#090a1c')
   }
   const mobile = tg.platform === 'ios' || tg.platform === 'android'
   if (mobile && supports('8.0')) tg.requestFullscreen()

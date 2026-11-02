@@ -131,7 +131,7 @@ export function Admin() {
   }
 
   return (
-    <div className="sheet scroll-area pad-top fixed inset-0 z-30 bg-surface px-4 pb-[calc(var(--safe-bottom)+24px)] text-ink">
+    <div className="sheet scroll-area pad-top starfield fixed inset-0 z-30 px-4 pb-[calc(var(--safe-bottom)+24px)] text-ink">
       <header className="flex items-center justify-between">
         <h2 className="font-display text-2xl font-semibold">{t.admin}</h2>
         <button onClick={() => setSheet(null)} aria-label={t.close} className="flex size-11 items-center justify-center">

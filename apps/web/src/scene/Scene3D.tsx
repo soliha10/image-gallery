@@ -299,18 +299,18 @@ function Stick({ controls }: { controls: Controls }) {
       {coarse && (
         <div
           ref={ghost}
-          className="pointer-events-none absolute left-7 bottom-[calc(var(--safe-bottom)+150px)] flex size-20 items-center justify-center rounded-full border border-paper/25 transition-opacity"
+          className="pointer-events-none absolute left-7 bottom-[calc(var(--safe-bottom)+150px)] flex size-20 items-center justify-center rounded-full border border-star/30 transition-opacity"
           aria-hidden
         >
-          <span className="size-8 rounded-full bg-paper/20" />
+          <span className="size-8 rounded-full bg-star/20" />
         </div>
       )}
       <div
         ref={base}
-        className="pointer-events-none absolute top-0 left-0 z-[6] flex size-28 items-center justify-center rounded-full border-2 border-paper/40 bg-black/20 opacity-0"
+        className="pointer-events-none absolute top-0 left-0 z-[6] flex size-28 items-center justify-center rounded-full border-2 border-star/40 bg-black/20 opacity-0"
         aria-hidden
       >
-        <div ref={knob} className="size-12 rounded-full bg-paper/80 shadow-lg" />
+        <div ref={knob} className="size-12 rounded-full bg-star/80 shadow-lg" />
       </div>
     </>
   )
@@ -319,14 +319,14 @@ function Stick({ controls }: { controls: Controls }) {
 function Guide({ onClose }: { onClose: () => void }) {
   const lines = matchMedia('(pointer: coarse)').matches ? [t.guideMove, t.guideLook, t.guideTap] : [t.guideKeys, t.guideTap]
   return (
-    <div className="rise absolute inset-x-6 top-[calc(var(--safe-top)+150px)] z-20 mx-auto max-w-80 rounded-2xl bg-walnut/90 p-5 text-paper shadow-xl backdrop-blur-md">
+    <div className="rise absolute inset-x-6 top-[calc(var(--safe-top)+150px)] z-20 mx-auto max-w-80 glass rounded-2xl p-5 text-star shadow-xl">
       <h2 className="font-display text-xl font-semibold">{t.guideTitle}</h2>
-      <ul className="mt-2 space-y-1.5 text-sm leading-snug text-paper/80">
+      <ul className="mt-2 space-y-1.5 text-sm leading-snug text-star/80">
         {lines.map((line) => (
           <li key={line}>{line}</li>
         ))}
       </ul>
-      <button onClick={onClose} className="mt-4 min-h-11 w-full rounded-xl bg-amber text-sm font-bold text-walnut">
+      <button onClick={onClose} className="mt-4 min-h-11 w-full rounded-xl bg-gold text-sm font-bold text-void">
         {t.guideOk}
       </button>
     </div>
@@ -338,7 +338,7 @@ function SceneButton({ label, onClick, active }: { label: string; onClick: () =>
     <button
       onClick={onClick}
       aria-pressed={active}
-      className={`min-h-9 rounded-full px-3.5 text-[13px] font-semibold backdrop-blur-sm transition-colors ${active ? 'bg-amber text-walnut' : 'bg-black/35 text-paper'}`}
+      className={`min-h-9 rounded-full px-3.5 text-[13px] font-semibold transition-colors ${active ? 'bg-gold text-void' : 'glass text-star'}`}
     >
       {label}
     </button>

@@ -24,7 +24,7 @@ export function Search() {
   }, [filter.q, setFilter, text])
 
   return (
-    <div className="sheet pad-top fixed inset-x-0 top-0 z-30 rounded-b-2xl bg-surface px-4 pb-4 text-ink shadow-2xl">
+    <div className="sheet pad-top fixed inset-x-0 top-0 z-30 glass rounded-b-2xl px-4 pb-4 text-ink shadow-2xl">
       <div className="flex items-center gap-2">
         <input
           ref={input}

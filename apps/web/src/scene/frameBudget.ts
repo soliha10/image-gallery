@@ -2,6 +2,7 @@ const WINDOW = 90
 const PAUSE_GAP = 0.25
 const SLOW_FPS = 26
 const UNUSABLE_FPS = 13
+const STRIKES = 2
 
 export type Verdict = 'ok' | 'slow' | 'unusable' | null
 
@@ -12,6 +13,7 @@ export type Verdict = 'ok' | 'slow' | 'unusable' | null
 export class FrameBudget {
   private frames = 0
   private elapsed = 0
+  private strikes = 0
 
   sample(delta: number): Verdict {
     if (delta > PAUSE_GAP) {
@@ -23,6 +25,13 @@ export class FrameBudget {
     if (this.frames < WINDOW) return null
     const fps = this.frames / this.elapsed
     this.frames = this.elapsed = 0
-    return fps < UNUSABLE_FPS ? 'unusable' : fps < SLOW_FPS ? 'slow' : 'ok'
+    if (fps >= SLOW_FPS) {
+      this.strikes = 0
+      return 'ok'
+    }
+    // One slow window is usually a passing stall; only a repeat counts as a slow device.
+    if (++this.strikes < STRIKES) return null
+    this.strikes = 0
+    return fps < UNUSABLE_FPS ? 'unusable' : 'slow'
   }
 }

@@ -31,13 +31,13 @@ class SceneBoundary extends Component<{ children: ReactNode }, { failed: boolean
 
 function Chip({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
   const inRoom = useStore((s) => s.view === 'room')
-  const idle = inRoom ? 'bg-black/35 text-paper backdrop-blur-sm' : 'bg-surface text-ink'
+  const idle = inRoom ? 'glass text-star' : 'bg-surface text-ink'
   return (
     <button
       onClick={onClick}
       aria-pressed={active}
-      className={`min-h-9 shrink-0 rounded-full px-3.5 text-[13px] font-semibold whitespace-nowrap transition-colors ${
-        active ? 'bg-amber text-walnut' : idle
+      className={`min-h-11 shrink-0 rounded-full px-4 text-[13px] font-semibold whitespace-nowrap transition-colors ${
+        active ? 'bg-gold text-void' : idle
       }`}
     >
       {label}
@@ -68,9 +68,9 @@ function Caption() {
   }, [])
   if (!photo) return null
   return (
-    <div key={photo.id} className="rise pointer-events-none px-5 pb-2 text-paper">
+    <div key={photo.id} className="rise pointer-events-none px-5 pb-2 text-star">
       <h1 className="font-display line-clamp-2 text-[22px] leading-tight font-semibold">{photo.title}</h1>
-      <p className="mt-1 truncate text-[13px] text-paper/65">
+      <p className="mt-1 truncate text-[13px] text-star/75">
         {hinted ? photo.credit ?? photo.description : t.hint}
       </p>
     </div>
@@ -86,7 +86,7 @@ function NavButton({ label, active, onClick, children }: { label: string; active
       }}
       aria-label={label}
       aria-pressed={active}
-      className={`flex min-h-12 flex-1 items-center justify-center rounded-xl transition-colors ${active ? 'text-amber' : 'text-paper/80'}`}
+      className={`flex min-h-12 flex-1 items-center justify-center rounded-xl transition-colors ${active ? 'text-gold' : 'text-star/80'}`}
     >
       {children}
     </button>
@@ -104,7 +104,7 @@ function BottomBar() {
   return (
     <div className="pad-bottom absolute inset-x-0 bottom-0 z-10 px-3">
       {view === 'room' && <Caption />}
-      <nav className="flex rounded-2xl bg-walnut/85 p-1 shadow-lg backdrop-blur-md">
+      <nav className="glass flex rounded-2xl p-1 shadow-lg">
         {!webglFailed && (
           <NavButton label={view === 'room' ? t.grid : t.room} onClick={() => setView(view === 'room' ? 'grid' : 'room')}>
             {view === 'room' ? <GridIcon /> : <RoomIcon />}
@@ -130,10 +130,10 @@ function Empty() {
   const filter = useStore((s) => s.filter)
   const body = filter.favorites ? t.emptyFavorites : filter.q ? t.emptySearch : t.emptyBody
   return (
-    <div className="pointer-events-none absolute inset-0 z-[5] flex flex-col items-center justify-center px-10 text-center text-paper">
-      <CatGlyph className="mb-4 w-24 text-amber" />
+    <div className="pointer-events-none absolute inset-0 z-[5] flex flex-col items-center justify-center px-10 text-center text-star">
+      <CatGlyph className="mb-4 w-24 text-gold" />
       <h2 className="font-display text-2xl font-semibold">{t.emptyTitle}</h2>
-      <p className="mt-2 text-sm leading-relaxed text-paper/70">{body}</p>
+      <p className="mt-2 text-sm leading-relaxed text-star/70">{body}</p>
     </div>
   )
 }
@@ -147,7 +147,7 @@ function FallbackNotice() {
   }, [failed])
   if (!failed || !visible) return null
   return (
-    <p role="status" className="rise absolute inset-x-4 bottom-[calc(var(--safe-bottom)+84px)] z-20 rounded-xl bg-walnut/90 px-4 py-2.5 text-center text-sm text-paper">
+    <p role="status" className="rise absolute inset-x-4 bottom-[calc(var(--safe-bottom)+84px)] z-20 glass rounded-xl px-4 py-2.5 text-center text-sm text-star">
       {t.fallback3d}
     </p>
   )
@@ -166,7 +166,7 @@ function Offline() {
   }, [])
   if (online) return null
   return (
-    <p role="status" className="absolute inset-x-4 top-[calc(var(--safe-top)+60px)] z-20 rounded-xl bg-walnut/90 px-4 py-2.5 text-center text-sm text-paper">
+    <p role="status" className="absolute inset-x-4 top-[calc(var(--safe-top)+60px)] z-20 glass rounded-xl px-4 py-2.5 text-center text-sm text-star">
       {t.offline}
     </p>
   )
@@ -201,7 +201,7 @@ export function App() {
   if (status === 'error') return <Message title={t.errorTitle} body={t.errorBody} action={() => void load()} />
 
   return (
-    <main className="relative h-full overflow-hidden bg-walnut">
+    <main className="relative h-full overflow-hidden bg-void">
       {view === 'room' ? (
         <SceneBoundary>
           <Suspense fallback={<Loader />}>
