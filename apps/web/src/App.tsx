@@ -129,18 +129,20 @@ function Empty() {
   const fresh = !filter.favorites && !filter.q && !filter.album
   const body = filter.favorites ? t.emptyFavorites : filter.q ? t.emptySearch : t.emptyBody
   return (
-    <div className="pointer-events-none absolute inset-0 z-[5] flex flex-col items-center justify-center px-10 text-center text-star">
-      <CatGlyph className="mb-4 w-24 text-gold" />
-      <h2 className="font-display text-2xl font-semibold">{fresh ? t.welcomeTitle : t.emptyTitle}</h2>
-      <p className="mt-2 text-sm leading-relaxed text-star/75">{body}</p>
+    <div className="pointer-events-none absolute inset-x-6 top-[calc(var(--safe-top)+120px)] z-[5] flex justify-center">
+      <div className="glass flex max-w-80 flex-col items-center rounded-2xl px-6 py-5 text-center text-star shadow-xl">
+      <CatGlyph className="mb-3 w-16 text-gold" />
+      <h2 className="font-display text-xl font-semibold">{fresh ? t.welcomeTitle : t.emptyTitle}</h2>
+      <p className="mt-2 text-sm leading-relaxed text-star/80">{body}</p>
       {fresh && (
         <button
           onClick={() => setSheet('admin')}
-          className="pointer-events-auto mt-6 min-h-11 rounded-full bg-gold px-6 text-sm font-bold text-void"
+          className="pointer-events-auto mt-5 min-h-11 rounded-full bg-gold px-6 text-sm font-bold text-void"
         >
           {t.upload}
         </button>
       )}
+      </div>
     </div>
   )
 }
