@@ -8,7 +8,7 @@ import { CatGlyph, Loader, Message } from './components/States'
 import { api } from './lib/api'
 import { LANGUAGES, t, type Language } from './lib/i18n'
 import { useStore } from './lib/store'
-import { haptic, startPhotoId } from './lib/telegram'
+import { haptic, onAppActivated, startPhotoId, startsAtUpload } from './lib/telegram'
 
 const Scene3D = lazy(() => import('./scene/Scene3D'))
 
@@ -266,8 +266,27 @@ export function App() {
   // Subscribing re-renders the whole tree when the language changes, so every label updates at once.
   useStore((s) => s.language)
 
+  // Photos sent to the bot while the app was in the background show up when it comes back.
+  useEffect(() => {
+    let last = 0
+    const sync = () => {
+      if (document.hidden || Date.now() - last < 4000) return
+      last = Date.now()
+      void useStore.getState().sync()
+    }
+    document.addEventListener('visibilitychange', sync)
+    addEventListener('focus', sync)
+    const stop = onAppActivated(sync)
+    return () => {
+      document.removeEventListener('visibilitychange', sync)
+      removeEventListener('focus', sync)
+      stop()
+    }
+  }, [])
+
   useEffect(() => {
     void load().then(async () => {
+      if (startsAtUpload() && !useStore.getState().visiting) useStore.getState().setSheet('admin')
       const id = startPhotoId()
       if (!id) return
       const { photos } = useStore.getState()

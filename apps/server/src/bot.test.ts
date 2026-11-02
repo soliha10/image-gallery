@@ -271,12 +271,15 @@ describe('language choice', () => {
     await command(ALICE, '/language')
     expect(buttons(sent('sendMessage')[0]).map((b) => b.callback_data)).toEqual(['lang:uz', 'lang:ru', 'lang:en'])
     await command(ALICE, '/start')
-    expect(buttons(sent('sendMessage')[1]).map((b) => b.callback_data).filter(Boolean)).toEqual(['lang:uz', 'lang:ru', 'lang:en'])
+    expect(buttons(sent('sendMessage')[1]).map((b) => b.callback_data).filter(Boolean)).toEqual(['up', 'lang:uz', 'lang:ru', 'lang:en'])
   })
 
   it('remembers the choice over Telegram’s language and renames this chat’s menus', async () => {
     await press(ALICE, 'lang:ru')
     expect(sent('editMessageText')[0]!.payload.text).toMatch(/Язык изменён/)
+    // Right after choosing, the next steps are one tap away: open the gallery or upload.
+    expect(buttons(sent('editMessageText')[0]).map((b) => b.url ?? b.callback_data)).toEqual([APP, 'up'])
+    expect(buttons(sent('editMessageText')[0])[1]!.text).toBe('📷 Загрузить фото')
     const scoped = sent('setMyCommands').find((call) => (call.payload.scope as { type?: string })?.type === 'chat')!
     expect(scoped.payload.scope).toEqual({ type: 'chat', chat_id: ALICE.id })
     expect((scoped.payload.commands as { description: string }[])[0]!.description).toBe('Открыть галерею')
@@ -285,6 +288,16 @@ describe('language choice', () => {
     await command(ALICE, '/stats')
     expect(sent('sendMessage')[0]!.payload.text).toMatch(/Ваша галерея/)
     await press(ALICE, 'lang:en')
+  })
+})
+
+describe('upload button', () => {
+  it('explains how to send photos and opens the app at its upload sheet', async () => {
+    await press(ALICE, 'up')
+    const reply = sent('sendMessage')[0]!
+    expect(reply.payload.text).toMatch(/📎/)
+    expect(buttons(reply)).toEqual([expect.objectContaining({ url: `${APP}?startapp=upload` })])
+    expect(sent('answerCallbackQuery')).toHaveLength(1)
   })
 })
 

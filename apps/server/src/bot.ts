@@ -105,6 +105,12 @@ export function createBot(token: string, db: Db) {
     return appLinkBase ? keyboard.row().text(botText(language).shareAlbum, `sa:${packId(albumId)}`) : keyboard
   }
 
+  /** What to do next once the bot speaks your language: open the gallery or add to it. */
+  const startKeyboard = (language?: string) => {
+    const keyboard = openKeyboard(language) ?? new InlineKeyboard()
+    return keyboard.text(botText(language).upload, 'up')
+  }
+
   const languageRow = (keyboard: InlineKeyboard) => {
     keyboard.row()
     for (const { code, label } of LANGUAGE_BUTTONS) keyboard.text(label, `lang:${code}`)
@@ -163,7 +169,7 @@ export function createBot(token: string, db: Db) {
   chat.command('start', async (ctx) => {
     const language = ctx.lang
     await applyChatLanguage(ctx.api, ctx.chat.id, language)
-    await ctx.reply(botText(language).welcome, { reply_markup: languageRow(openKeyboard(language) ?? new InlineKeyboard()) })
+    await ctx.reply(botText(language).welcome, { reply_markup: languageRow(startKeyboard(language)) })
   })
 
   chat.command('language', (ctx) =>
@@ -174,7 +180,14 @@ export function createBot(token: string, db: Db) {
     const language = ctx.match[1] as Language
     await saveLanguage(db, ctx.from.id, language)
     if (ctx.chat) await applyChatLanguage(ctx.api, ctx.chat.id, language)
-    await ctx.editMessageText(botText(language).languageSet, { reply_markup: openKeyboard(language) })
+    await ctx.editMessageText(botText(language).languageSet, { reply_markup: startKeyboard(language) })
+    await ctx.answerCallbackQuery()
+  })
+
+  bot.callbackQuery('up', async (ctx) => {
+    const text = botText(ctx.lang)
+    const inApp = appLink('upload')
+    await ctx.reply(text.uploadHint, { reply_markup: inApp ? new InlineKeyboard().url(text.uploadInApp, inApp) : undefined })
     await ctx.answerCallbackQuery()
   })
 

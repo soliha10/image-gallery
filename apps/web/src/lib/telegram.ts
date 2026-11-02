@@ -148,4 +148,14 @@ export function startPhotoId() {
 
 export const startGallery = () => parseGalleryStart(startParam())
 
+/** The bot's "upload in the app" button opens straight at the upload sheet. */
+export const startsAtUpload = () => startParam() === 'upload'
+
+/** Called when the Mini App comes back into view inside Telegram. */
+export function onAppActivated(handler: () => void) {
+  if (!tg || !supports('8.0')) return () => undefined
+  tg.onEvent('activated', handler)
+  return () => tg.offEvent('activated', handler)
+}
+
 export const userLanguage = () => tg?.initDataUnsafe.user?.language_code ?? navigator.language.slice(0, 2)

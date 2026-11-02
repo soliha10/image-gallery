@@ -52,6 +52,10 @@ const uz = {
     `📊 Galereyangiz\n\nRasmlar: ${photos} / ${limit}\nAlbomlar: ${albums}\nUlashish havolasi: ${shared ? 'yoqilgan' : 'yo‘q'}`,
   inlineEmpty: 'Galereyangiz bo‘sh — botga rasm yuboring',
   chooseLanguage: 'Tilni tanlang:',
+  upload: '📷 Rasm yuklash',
+  uploadInApp: '🖼 Ilovada yuklash',
+  uploadHint:
+    '📎 tugmasini bosib, rasmni shu chatga yuboring — u galereyangizga tushadi va ilovada ham ko‘rinadi.\n\nBir nechta rasmni birga yuborsangiz, albom bo‘ladi. Izohning birinchi qatori sarlavha bo‘ladi.',
   languageSet: 'Til o‘zgartirildi: o‘zbekcha. Galereya ham shu tilda ochiladi.',
   shareAlbum: '🔗 Albomni ulashish',
   albumShareLink: (title: string, link: string) =>
@@ -118,6 +122,10 @@ const ru: BotText = {
     `📊 Ваша галерея\n\nФото: ${photos} / ${limit}\nАльбомы: ${albums}\nСсылка: ${shared ? 'включена' : 'нет'}`,
   inlineEmpty: 'Галерея пуста — пришлите боту фото',
   chooseLanguage: 'Выберите язык:',
+  upload: '📷 Загрузить фото',
+  uploadInApp: '🖼 Загрузить в приложении',
+  uploadHint:
+    'Нажмите 📎 и отправьте фото в этот чат — оно попадёт в вашу галерею и появится в приложении.\n\nНесколько фото сразу станут альбомом. Первая строка подписи станет названием.',
   languageSet: 'Язык изменён: русский. Галерея тоже откроется на нём.',
   shareAlbum: '🔗 Поделиться альбомом',
   albumShareLink: (title, link) =>
@@ -182,6 +190,10 @@ const en: BotText = {
     `📊 Your gallery\n\nPhotos: ${photos} / ${limit}\nAlbums: ${albums}\nShare link: ${shared ? 'on' : 'off'}`,
   inlineEmpty: 'Your gallery is empty — send the bot a photo',
   chooseLanguage: 'Choose a language:',
+  upload: '📷 Upload photos',
+  uploadInApp: '🖼 Upload in the app',
+  uploadHint:
+    'Tap 📎 and send a photo to this chat — it goes into your gallery and shows up in the app.\n\nSend several at once to make an album. The first caption line becomes the title.',
   languageSet: 'Language changed to English. The gallery opens in it too.',
   shareAlbum: '🔗 Share album',
   albumShareLink: (title, link) =>

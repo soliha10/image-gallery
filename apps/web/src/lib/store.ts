@@ -50,6 +50,8 @@ interface State {
   leaveGallery(): Promise<void>
   setNotice(notice: Notice | null): void
   load(): Promise<void>
+  /** Quietly picks up photos added elsewhere, such as through the bot, without a loading screen. */
+  sync(): Promise<void>
   loadMore(): Promise<void>
   setFilter(filter: PhotoFilter): Promise<void>
   refresh(): Promise<void>
@@ -134,6 +136,21 @@ export const useStore = create<State>((set, get) => ({
       })
     } catch (error) {
       set({ status: error instanceof ApiError && error.status === 401 ? 'outside' : 'error' })
+    }
+  },
+
+  async sync() {
+    const { status, filter, visiting, photos } = get()
+    if (status !== 'ready') return
+    try {
+      const gallery = visiting?.token
+      const [me, albums, page] = await Promise.all([api.me(), api.albums(gallery), api.photos(filter, 0, gallery)])
+      // A filter changed meanwhile, or nothing new arrived: leave the screen as it is.
+      if (get().filter !== filter) return
+      const same = page.total === get().total && page.items.every((photo, i) => photo.id === photos[i]?.id)
+      set(same ? { me, albums } : { me, albums, photos: page.items, total: page.total, nextCursor: page.nextCursor ? Number(page.nextCursor) : null })
+    } catch {
+      // Offline or asleep server: the next return to the app tries again.
     }
   },
 
