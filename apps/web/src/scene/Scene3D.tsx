@@ -362,7 +362,7 @@ function SceneButton({ label, onClick, active }: { label: string; onClick: () =>
     <button
       onClick={onClick}
       aria-pressed={active}
-      className={`min-h-9 rounded-full px-3.5 text-[13px] font-semibold transition-colors ${active ? 'bg-gold text-void' : 'glass text-star'}`}
+      className={`min-h-11 rounded-full px-4 text-[13px] font-semibold transition-colors ${active ? 'bg-gold text-void' : 'glass text-star'}`}
     >
       {label}
     </button>
@@ -379,6 +379,7 @@ export default function Scene3D() {
   const light = useRef<THREE.PointLight>(null)
   const pendingOpen = useRef<number | null>(null)
   const drop = useRef(0)
+  const mounted = useRef(true)
   const intro = useRef(reducedMotion || introPlayed || useStore.getState().lightbox ? 0 : INTRO_TIME)
   const three = useRef<{ camera: THREE.Camera } | null>(null)
   const raycaster = useMemo(() => new THREE.Raycaster(), [])
@@ -407,6 +408,13 @@ export default function Scene3D() {
     )
     return () => timers.forEach(clearTimeout)
   }, [quality])
+
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
 
   useEffect(() => {
     introPlayed = true
@@ -507,7 +515,10 @@ export default function Scene3D() {
             let restoreTimer = 0
             canvas.addEventListener('webglcontextlost', (event) => {
               event.preventDefault()
-              restoreTimer = window.setTimeout(markWebglFailed, 3000)
+              // Leaving the room releases the context on purpose; that is not a failure.
+              restoreTimer = window.setTimeout(() => {
+                if (mounted.current) markWebglFailed()
+              }, 3000)
             })
             canvas.addEventListener('webglcontextrestored', () => clearTimeout(restoreTimer))
           }}

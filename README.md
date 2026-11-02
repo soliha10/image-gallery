@@ -1,7 +1,7 @@
 # Mushuk Galereyasi
 
-Telegram Mini App: foydalanuvchi mushukchani dumaloq kutubxona-galereya bo'ylab erkin
-boshqaradi va rasmlarni muzeydagidek tomosha qiladi. Rasmlar bot orqali yoki ilova ichidagi boshqaruv paneli orqali qo'shiladi.
+Telegram Mini App: foydalanuvchi skafandrli mushukchani Somon yo'lida suzib yurgan shisha
+observatoriya bo'ylab erkin boshqaradi va rasmlarni yulduzlar orasida tomosha qiladi. Rasmlar bot orqali yoki ilova ichidagi boshqaruv paneli orqali qo'shiladi.
 
 ## Lokal ishga tushirish
 
@@ -15,7 +15,7 @@ pnpm dev       # http://localhost:5173
 
 `BOT_TOKEN` bo'sh bo'lsa, brauzerda mock admin foydalanuvchi ishlaydi.
 
-## Zaldagi boshqaruv
+## Koinotdagi boshqaruv
 
 - Telefon: chap pastda suring, mushukcha yuradi. Boshqa joyni sursangiz, kamera aylanadi.
 - Kompyuter: WASD yoki strelkalar, Shift bilan yugurish, sichqoncha bilan qarash.
@@ -23,6 +23,15 @@ pnpm dev       # http://localhost:5173
   rasm to'liq ochiladi. Mushukchaga bossangiz, erkalanadi.
 - "Sayohat" tugmasi rasmlarni navbat bilan ko'rsatadi, istalgan harakat uni to'xtatadi.
 - Sifat darajasi tugma orqali o'zgaradi va saqlanadi. Sekin qurilmada sahna o'zi pasaytiradi.
+
+| Effekt | Past | O'rta | Yuqori |
+|---|---|---|---|
+| Osmon teksturasi | 1024 | 2048 | 2048 |
+| Yulduzlar | 900 | 2400 | 4200 |
+| Nebulalar | 2 | 4 | 5 |
+| Asteroidlar | 0 | 24 | 48 |
+| Uchuvchi yulduz, yulduz izi, rasmlar suzishi | yo'q | bor | bor |
+| Rasm teksturasi | 400 | 800 | 800 |
 
 ## Bot ulash
 
@@ -65,6 +74,6 @@ Render'ning bepul diski vaqtinchalik, shuning uchun production'da R2 majburiy.
 
 ## Litsenziyalar
 
-Mushuk va xona kod bilan yaratilgan, tashqi 3D fayl ishlatilmagan. Boshlang'ich rasmlar
+Mushuk, osmon, sayyoralar va platforma kod bilan yaratilgan, tashqi 3D fayl yoki tekstura ishlatilmagan. Boshlang'ich rasmlar
 The Met Open Access dasturidan (CC0).
 # image-gallery
