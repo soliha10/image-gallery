@@ -48,40 +48,40 @@ pnpm dev       # http://localhost:5173
 
 | Qism | Servis | Eslatma |
 |---|---|---|
-| Ilova va bot | Render Web Service | Faolsizlikda uxlaydi, keyingi so'rov 1 daqiqagacha kutadi |
-| PostgreSQL | Neon | Bepul reja |
-| Rasmlar va CDN | Cloudflare R2 | Chiqish trafigi bepul |
+| Ilova va bot | Render Web Service (Frankfurt) | Faolsizlikda uxlaydi, keyingi so'rov 1 daqiqagacha kutadi |
+| PostgreSQL va rasmlar | Neon (Frankfurt) | Postgres va S3-mos Object Storage bitta loyihada |
 
-Limitlar va karta talablari o'zgarib turadi, ro'yxatdan o'tishdan oldin har bir servisning narx
-sahifasini tekshiring.
+Neon loyihasi `mushuk-galereyasi`, `gallery` bucket'i public. Storage manzillari `render.yaml` da
+yozilgan. Public bucket brauzerga `Access-Control-Allow-Origin: *` beradi, CORS sozlash shart emas.
+Boshqa S3 (masalan Cloudflare R2) ishlatsangiz, `render.yaml` dagi storage qiymatlarini almashtiring.
 
-1. **Neon:** loyiha yarating, `DATABASE_URL` ni oling (`?sslmode=require` bilan).
-2. **R2:** `gallery` bucket yarating. Public development URL yoki o'z domeningizni yoqing, shu manzil
-   `MEDIA_BASE_URL` bo'ladi. "Manage API tokens" orqali Object Read & Write kaliti oling.
-   `S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com`.
-3. **R2 CORS:** bucket sozlamasida Render manzilingizga `GET` ruxsat bering, aks holda 3D rasmlar
-   yuklanmaydi:
-   `[{"AllowedOrigins":["https://<app>.onrender.com"],"AllowedMethods":["GET"],"AllowedHeaders":["*"]}]`
-4. **Lokal rasmlarni ko'chirish:** `pnpm dev` ni to'xtating, ildizda `.env.production` yarating
+Maxfiy qiymatlar faqat ikki joyda turadi: Render'ning Environment bo'limi va lokal `.env.production`.
+
+1. **Neon kalitlari:**
+   - Postgres: loyiha sahifasida **Connect** tugmasi orqali `DATABASE_URL` ni oling.
+   - Storage: **Object storage > Connect** bo'limida kalit yarating, `S3_ACCESS_KEY_ID` va
+     `S3_SECRET_ACCESS_KEY` ni oling.
+2. **Lokal rasmlarni ko'chirish:** `pnpm dev` ni to'xtating, ildizda `.env.production` yarating
    (git'ga kirmaydi) va `pnpm data:push` ni ishga tushiring. Qayta ishga tushirish xavfsiz, bor
    yozuvlar o'tkazib yuboriladi.
 
    ```
-   DATABASE_URL=postgres://...neon.tech/neondb?sslmode=require
-   S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+   DATABASE_URL=postgresql://...neon.tech/neondb?sslmode=require
+   S3_ENDPOINT=https://br-noisy-mouse-bafcubif.storage.c-8.eu-central-1.aws.neon.tech
    S3_BUCKET=gallery
+   S3_REGION=eu-central-1
    S3_ACCESS_KEY_ID=...
    S3_SECRET_ACCESS_KEY=...
-   MEDIA_BASE_URL=https://<r2-public-domain>
+   MEDIA_BASE_URL=https://br-noisy-mouse-bafcubif.storage.c-8.eu-central-1.aws.neon.tech/gallery
    ```
-5. **Render:** New > Blueprint, GitHub repozitoriyini va `main` branch'ni tanlang. `render.yaml`
-   so'ragan qiymatlarni kiriting. Birinchi deploy'dan keyin `https://<app>.onrender.com` manzilini
-   `PUBLIC_URL` va `MINI_APP_URL` ga yozib, qayta deploy qiling.
-6. **Telegram:** @BotFather'da `/newapp` bilan Mini App yarating, URL sifatida Render manzilini bering.
-   Hosil bo'lgan `https://t.me/<bot>/<app>` havolasini Render'da `VITE_TG_APP_LINK` ga yozib, qayta
-   deploy qiling. Botga `/start` yuboring.
+3. **Render:** New > Blueprint orqali repozitoriyni va `main` branch'ni tanlang. Maxfiy qiymatlarni
+   kiriting. Birinchi deploy'dan keyin `https://<app>.onrender.com` manzilini `PUBLIC_URL` va
+   `MINI_APP_URL` ga yozib, qayta deploy qiling.
+4. **Telegram:** @BotFather'da `/newbot` va `/newapp` bilan bot va Mini App yarating. Mini App URL'i
+   Render manzili bo'ladi. `BOT_TOKEN`, `ADMIN_IDS` va `VITE_TG_APP_LINK=https://t.me/<bot>/<app>` ni
+   Render'ga yozib, qayta deploy qiling. Botga `/start` yuboring.
 
-Render'ning bepul diski vaqtinchalik, shuning uchun production'da R2 majburiy.
+Render'ning bepul diski vaqtinchalik, shuning uchun production'da tashqi S3 storage majburiy.
 
 ## Buyruqlar
 
