@@ -7,10 +7,10 @@ import { useStore, type Rect } from '../lib/store'
 import { sceneBridge } from './bridge'
 import { Cat } from './Cat'
 import { Controls, type StickView } from './controls'
+import { Cosmos } from './Cosmos'
 import { FrameBudget } from './frameBudget'
 import { Paintings, type PaintingsHandle } from './Paintings'
-import { device, lowerQuality, nextQuality, pixelRatioFor, savedQuality, saveQuality, startingQuality, type Quality } from './quality'
-import { Room } from './Room'
+import { device, EFFECTS, lowerQuality, nextQuality, pixelRatioFor, savedQuality, saveQuality, startingQuality, type Quality } from './quality'
 import { angleAt, clamp, mod, resolve, SLOTS, slotOfIndex, Walker, WALL_RADIUS, wrapAngle } from './walker'
 
 const CAMERA_LIMIT = WALL_RADIUS - 0.7
@@ -62,7 +62,7 @@ function Dust() {
   })
   return (
     <points ref={ref} geometry={geometry} frustumCulled={false}>
-      <pointsMaterial color="#ffd9a0" size={0.018} transparent opacity={0.3} depthWrite={false} />
+      <pointsMaterial color="#cfd8ff" size={0.018} transparent opacity={0.3} depthWrite={false} />
     </points>
   )
 }
@@ -363,14 +363,13 @@ export default function Scene3D() {
   const openLightbox = useStore((s) => s.openLightbox)
   const loadMore = useStore((s) => s.loadMore)
   const markWebglFailed = useStore((s) => s.markWebglFailed)
-  const scheme = document.documentElement.dataset.scheme
   const [quality, setQuality] = useState<Quality>(() => savedQuality() ?? startingQuality(device()))
   const [dpr, setDpr] = useState(1)
   const [visible, setVisible] = useState(!document.hidden)
   const [settled, setSettled] = useState(false)
   const [touring, setTouring] = useState(false)
   const [guide, setGuide] = useState(() => !guideSeen())
-  const low = quality === 'low'
+  const effects = EFFECTS[quality]
 
   // Sharpness arrives in steps after the room is up, so opening stays quick.
   useEffect(() => {
@@ -460,8 +459,8 @@ export default function Scene3D() {
           dpr={dpr}
           flat
           frameloop={visible && !settled ? 'always' : 'never'}
-          camera={{ fov: 46, near: 0.1, far: 40, position: [0, 1.7, 4.9] }}
-          gl={{ antialias: !low, powerPreference: 'high-performance', alpha: false }}
+          camera={{ fov: 46, near: 0.1, far: 320, position: [0, 1.7, 4.9] }}
+          gl={{ antialias: effects.antialias, powerPreference: 'high-performance', alpha: false }}
           onCreated={(state) => {
             three.current = state
             const canvas = state.gl.domElement
@@ -473,14 +472,15 @@ export default function Scene3D() {
             canvas.addEventListener('webglcontextrestored', () => clearTimeout(restoreTimer))
           }}
         >
-          <color attach="background" args={[scheme === 'light' ? '#3d2a1e' : '#150c08']} />
-          <fog attach="fog" args={[scheme === 'light' ? '#3d2a1e' : '#150c08', 11, 30]} />
-          <hemisphereLight args={['#ffdfb0', '#4a2c1c', scheme === 'light' ? 2.1 : 1.35]} />
-          <pointLight color="#ffd9a0" position={[0, 3.6, 0]} intensity={16} distance={15} decay={1.3} />
-          <pointLight ref={light} color="#ffc98a" intensity={9} distance={9} decay={1.5} />
+          <color attach="background" args={['#05061a']} />
+          <fog attach="fog" args={['#090a1c', 18, 70]} />
+          <hemisphereLight args={['#d6deff', '#3b3478', 1.7]} />
+          <directionalLight color="#bcd0ff" position={[-5, 8, 7]} intensity={1.1} />
+          <pointLight color="#ffd9a0" position={[0, 2.2, 0]} intensity={14} distance={15} decay={1.3} />
+          <pointLight ref={light} color="#fff0dc" intensity={8} distance={8} decay={1.5} />
 
-          <Room night={scheme !== 'light'} />
-          <Paintings ref={paintings} walker={walker} photos={photos} textureWidth={low ? 400 : 800} />
+          <Cosmos walker={walker} effects={effects} calm={reducedMotion} />
+          <Paintings ref={paintings} walker={walker} photos={photos} textureWidth={effects.textureWidth} drift={effects.drift && !reducedMotion} />
 
           <group ref={cat}>
             <Cat walker={walker} />
@@ -490,9 +490,9 @@ export default function Scene3D() {
           </group>
           <mesh ref={shadow} rotation={[-Math.PI / 2, 0, 0]}>
             <circleGeometry args={[0.46, 24]} />
-            <meshBasicMaterial color="#000" transparent opacity={0.3} depthWrite={false} />
+            <meshBasicMaterial color="#02030f" transparent opacity={0.55} depthWrite={false} />
           </mesh>
-          {!reducedMotion && !low && <Dust />}
+          {!reducedMotion && effects.drift && <Dust />}
 
           <Director
             walker={walker}
