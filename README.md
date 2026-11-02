@@ -46,25 +46,46 @@ pnpm dev       # http://localhost:5173
 
 ## Bepul production
 
-| Qism | Servis | Bepul limit |
+| Qism | Servis | Eslatma |
 |---|---|---|
 | Ilova va bot | Render Web Service | Faolsizlikda uxlaydi, keyingi so'rov 1 daqiqagacha kutadi |
-| PostgreSQL | Neon | 0.5 GB |
-| Rasmlar va CDN | Cloudflare R2 | 10 GB, chiqish trafigi bepul |
-| Xatolar | Sentry | Developer rejasi |
+| PostgreSQL | Neon | Bepul reja |
+| Rasmlar va CDN | Cloudflare R2 | Chiqish trafigi bepul |
 
-1. Neon'da baza yarating, `DATABASE_URL` ni oling.
-2. R2'da bucket yarating, public access yoqing. `S3_ENDPOINT`, `S3_BUCKET`, kalitlarni va
-   `MEDIA_BASE_URL=https://<public-domain>` ni oling.
-3. Bucket CORS'iga Mini App domenini qo'shing, aks holda 3D teksturalar yuklanmaydi.
-4. Render'da `render.yaml` bilan Blueprint yarating, qiymatlarni kiriting. `PUBLIC_URL` va
-   `MINI_APP_URL` Render manzili bo'ladi. `VITE_TG_APP_LINK` Docker build argument sifatida beriladi.
+Limitlar va karta talablari o'zgarib turadi, ro'yxatdan o'tishdan oldin har bir servisning narx
+sahifasini tekshiring.
+
+1. **Neon:** loyiha yarating, `DATABASE_URL` ni oling (`?sslmode=require` bilan).
+2. **R2:** `gallery` bucket yarating. Public development URL yoki o'z domeningizni yoqing, shu manzil
+   `MEDIA_BASE_URL` bo'ladi. "Manage API tokens" orqali Object Read & Write kaliti oling.
+   `S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com`.
+3. **R2 CORS:** bucket sozlamasida Render manzilingizga `GET` ruxsat bering, aks holda 3D rasmlar
+   yuklanmaydi:
+   `[{"AllowedOrigins":["https://<app>.onrender.com"],"AllowedMethods":["GET"],"AllowedHeaders":["*"]}]`
+4. **Lokal rasmlarni ko'chirish:** `pnpm dev` ni to'xtating, ildizda `.env.production` yarating
+   (git'ga kirmaydi) va `pnpm data:push` ni ishga tushiring. Qayta ishga tushirish xavfsiz, bor
+   yozuvlar o'tkazib yuboriladi.
+
+   ```
+   DATABASE_URL=postgres://...neon.tech/neondb?sslmode=require
+   S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+   S3_BUCKET=gallery
+   S3_ACCESS_KEY_ID=...
+   S3_SECRET_ACCESS_KEY=...
+   MEDIA_BASE_URL=https://<r2-public-domain>
+   ```
+5. **Render:** New > Blueprint, GitHub repozitoriyini va `main` branch'ni tanlang. `render.yaml`
+   so'ragan qiymatlarni kiriting. Birinchi deploy'dan keyin `https://<app>.onrender.com` manzilini
+   `PUBLIC_URL` va `MINI_APP_URL` ga yozib, qayta deploy qiling.
+6. **Telegram:** @BotFather'da `/newapp` bilan Mini App yarating, URL sifatida Render manzilini bering.
+   Hosil bo'lgan `https://t.me/<bot>/<app>` havolasini Render'da `VITE_TG_APP_LINK` ga yozib, qayta
+   deploy qiling. Botga `/start` yuboring.
 
 Render'ning bepul diski vaqtinchalik, shuning uchun production'da R2 majburiy.
 
 ## Buyruqlar
 
-`pnpm test`, `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm db:generate`.
+`pnpm test`, `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm db:generate`, `pnpm data:push`.
 
 ## Tuzilma
 

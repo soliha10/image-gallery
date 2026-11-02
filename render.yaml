@@ -13,6 +13,8 @@ services:
         sync: false
       - key: MINI_APP_URL
         sync: false
+      - key: VITE_TG_APP_LINK
+        sync: false
       - key: BOT_WEBHOOK_SECRET
         generateValue: true
       - key: DATABASE_URL

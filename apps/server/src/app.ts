@@ -45,7 +45,12 @@ export async function buildApp(db: Db, bot: Bot | null) {
 
   // grammY refuses long polling once a webhook handler exists, so the route is webhook-only.
   if (bot && env.PUBLIC_URL) {
-    const handle = webhookCallback(bot, 'fastify', { secretToken: env.BOT_WEBHOOK_SECRET })
+    // Waking from sleep and resizing a photo can outlast the default limit, and Telegram would then resend.
+    const handle = webhookCallback(bot, 'fastify', {
+      secretToken: env.BOT_WEBHOOK_SECRET,
+      onTimeout: 'return',
+      timeoutMilliseconds: 25_000,
+    })
     app.post('/telegram/webhook', handle)
   }
 
