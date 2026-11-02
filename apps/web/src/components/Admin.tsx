@@ -1,6 +1,6 @@
 import { photoUrl, type Photo } from '@gallery/shared'
 import { useEffect, useRef, useState } from 'react'
-import { api } from '../lib/api'
+import { api, ApiError } from '../lib/api'
 import { t } from '../lib/i18n'
 import { backButton, confirm, haptic, mainButton } from '../lib/telegram'
 import { useStore } from '../lib/store'
@@ -86,6 +86,7 @@ export function Admin() {
   const photos = useStore((s) => s.photos)
   const filter = useStore((s) => s.filter)
   const refresh = useStore((s) => s.refresh)
+  const me = useStore((s) => s.me)
   const [albumTitle, setAlbumTitle] = useState('')
   const [progress, setProgress] = useState<string | null>(null)
   const file = useRef<HTMLInputElement>(null)
@@ -95,11 +96,15 @@ export function Admin() {
 
   const upload = async (files: File[]) => {
     let failed = 0
+    let full = false
     for (const [i, item] of files.entries()) {
       setProgress(`${t.uploading} ${i + 1}/${files.length}`)
-      await api.upload(item, filter.album).catch(() => failed++)
+      await api.upload(item, filter.album).catch((error: unknown) => {
+        failed++
+        if (error instanceof ApiError && error.status === 409) full = true
+      })
     }
-    setProgress(failed ? `${failed} ${t.uploadFailed}` : null)
+    setProgress(full ? t.galleryFull : failed ? `${failed} ${t.uploadFailed}` : null)
     if (!failed) haptic.success()
     await refresh()
   }
@@ -133,7 +138,14 @@ export function Admin() {
   return (
     <div className="sheet scroll-area pad-top starfield fixed inset-0 z-30 px-4 pb-[calc(var(--safe-bottom)+24px)] text-ink">
       <header className="flex items-center justify-between">
-        <h2 className="font-display text-2xl font-semibold">{t.admin}</h2>
+        <div>
+          <h2 className="font-display text-2xl font-semibold">{t.myGallery}</h2>
+          {me && (
+            <p className="text-xs text-hint">
+              {me.photoCount} / {me.photoLimit} {t.photos}
+            </p>
+          )}
+        </div>
         <button onClick={() => setSheet(null)} aria-label={t.close} className="flex size-11 items-center justify-center">
           <CloseIcon />
         </button>
@@ -154,6 +166,7 @@ export function Admin() {
         {t.upload}
       </button>
       {progress && <p className="mt-2 text-sm text-hint" role="status">{progress}</p>}
+      <p className="mt-2 text-xs leading-relaxed text-hint">{t.botHint}</p>
 
       <h3 className="mt-7 mb-2 text-sm font-bold text-hint">{t.albums}</h3>
       <div className="flex gap-2">

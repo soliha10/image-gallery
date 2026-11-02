@@ -2,7 +2,8 @@ import { readdir, readFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
 import { PGlite } from '@electric-sql/pglite'
 import { drizzle } from 'drizzle-orm/pglite'
-import { closeDb, createDb } from './db'
+import { migrate } from 'drizzle-orm/pglite/migrator'
+import { closeDb, createDb, migrationsFolder } from './db'
 import { albums, photos } from './db/schema'
 import { env } from './env'
 import { localMediaRoot, storage, usesLocalStorage } from './lib/storage'
@@ -12,6 +13,12 @@ const CONTENT_TYPES: Record<string, string> = { '.jpg': 'image/jpeg', '.webp': '
 /** Copies the local gallery to production. Running it again skips what is already there. */
 if (!env.DATABASE_URL || usesLocalStorage) {
   console.error('.env.production needs DATABASE_URL and S3_BUCKET, otherwise there is nowhere to copy to.')
+  process.exit(1)
+}
+// Galleries are personal, so the copied photos need a Telegram user to belong to.
+const owner = Number(process.env.OWNER_ID)
+if (!Number.isInteger(owner) || owner <= 0) {
+  console.error('Set OWNER_ID in .env.production to your Telegram user id (from @userinfobot).')
   process.exit(1)
 }
 
@@ -24,12 +31,16 @@ if (devServer) {
 
 const client = new PGlite(env.PGLITE_DIR)
 const local = drizzle(client)
+// An older local copy may predate personal galleries, so bring it up to date before reading.
+await migrate(local, { migrationsFolder })
 const target = await createDb()
 
 const localAlbums = await local.select().from(albums)
 const localPhotos = await local.select().from(photos)
 
-if (localAlbums.length > 0) await target.insert(albums).values(localAlbums).onConflictDoNothing()
+if (localAlbums.length > 0) {
+  await target.insert(albums).values(localAlbums.map((album) => ({ ...album, ownerId: owner }))).onConflictDoNothing()
+}
 
 let copied = 0
 for (const photo of localPhotos) {
@@ -41,7 +52,7 @@ for (const photo of localPhotos) {
       storage.put(`photos/${photo.id}/${name}`, await readFile(join(folder, name)), CONTENT_TYPES[extname(name)] ?? 'application/octet-stream'),
     ),
   )
-  await target.insert(photos).values(photo).onConflictDoNothing()
+  await target.insert(photos).values({ ...photo, ownerId: owner }).onConflictDoNothing()
   console.log(`${++copied}/${localPhotos.length} ${photo.title || photo.id}`)
 }
 

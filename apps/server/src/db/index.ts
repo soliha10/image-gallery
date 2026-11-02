@@ -13,7 +13,7 @@ import * as schema from './schema'
 
 export type Db = PgDatabase<PgQueryResultHKT, typeof schema>
 
-const migrationsFolder = resolve(dirname(fileURLToPath(import.meta.url)), '../../drizzle')
+export const migrationsFolder = resolve(dirname(fileURLToPath(import.meta.url)), '../../drizzle')
 
 let release: () => Promise<void> = async () => undefined
 

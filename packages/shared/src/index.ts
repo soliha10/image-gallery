@@ -35,8 +35,9 @@ export interface Me {
   id: number
   firstName: string
   languageCode: string | null
-  isAdmin: boolean
   favoriteIds: string[]
+  photoCount: number
+  photoLimit: number
 }
 
 export const photoQuerySchema = z.object({

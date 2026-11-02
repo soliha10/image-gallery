@@ -3,10 +3,10 @@ import type { Message } from 'grammy/types'
 import { sql } from 'drizzle-orm'
 import type { Db } from './db'
 import { albums } from './db/schema'
-import { adminIds, env } from './env'
+import { env } from './env'
 import { UnsupportedImageError } from './lib/image'
 import { MediaGroupCollector } from './lib/mediaGroup'
-import { addPhoto } from './lib/photos'
+import { addPhoto, QuotaExceededError } from './lib/photos'
 
 const MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024
 
@@ -42,17 +42,21 @@ export function createBot(token: string, db: Db) {
     return Buffer.from(await response.arrayBuffer())
   }
 
+  // Each sender's photos land in their own gallery.
   const save = async (message: Message, file: IncomingFile, albumId: string | null) => {
+    const owner = message.from!.id
     await addPhoto(db, await download(file.fileId), {
       ...splitCaption(message.caption),
+      ownerId: owner,
       albumId,
       telegramFileUniqueId: file.fileUniqueId,
-      createdBy: message.from?.id,
+      createdBy: owner,
     })
   }
 
   const failureText = (error: unknown) => {
     if (error instanceof UnsupportedImageError) return 'Bu format qo‘llab-quvvatlanmaydi. JPEG, PNG, WebP yoki AVIF yuboring.'
+    if (error instanceof QuotaExceededError) return `Galereyangiz to‘ldi: ${error.limit} ta rasm. Yangisini qo‘shish uchun eskilarini o‘chiring.`
     if (String(error).includes('unique')) return 'Bu rasm galereyada allaqachon bor.'
     console.error('photo import failed', error)
     return 'Rasmni saqlab bo‘lmadi. Birozdan keyin qayta urinib ko‘ring.'
@@ -61,15 +65,22 @@ export function createBot(token: string, db: Db) {
   const albums_ = new MediaGroupCollector<{ message: Message; file: IncomingFile }>(1500, (_, items) => {
     void (async () => {
       const chatId = items[0]!.message.chat.id
+      const owner = items[0]!.message.from!.id
       const captioned = items.find(({ message }) => message.caption)
       const title = splitCaption(captioned?.message.caption).title || 'Yangi albom'
       const [album] = await db
         .insert(albums)
-        .values({ title, position: sql`(select coalesce(max(position), 0) + 1 from albums)` })
+        .values({
+          ownerId: owner,
+          title,
+          position: sql`(select coalesce(max(${albums.position}), 0) + 1 from ${albums} where ${albums.ownerId} = ${owner})`,
+        })
         .returning()
       const results = await Promise.allSettled(items.map(({ message, file }) => save(message, file, album!.id)))
       const saved = results.filter((r) => r.status === 'fulfilled').length
-      await bot.api.sendMessage(chatId, `«${title}» albomiga ${saved} ta rasm qo‘shildi.`)
+      const failure = results.find((r): r is PromiseRejectedResult => r.status === 'rejected')
+      const note = failure ? ` ${failureText(failure.reason)}` : ''
+      await bot.api.sendMessage(chatId, `«${title}» albomiga ${saved} ta rasm qo‘shildi.${note}`)
     })().catch((error) => console.error('album import failed', error))
   })
 
@@ -77,7 +88,10 @@ export function createBot(token: string, db: Db) {
     env.MINI_APP_URL ? new InlineKeyboard().webApp('Galereyani ochish', env.MINI_APP_URL) : undefined
 
   bot.command('start', (ctx) =>
-    ctx.reply('Xush kelibsiz! Mushukcha sizni yulduzlar orasidagi galereyada kutyapti.', { reply_markup: openButton() }),
+    ctx.reply(
+      'Xush kelibsiz! Bu sizning shaxsiy galereyangiz: menga rasm yuboring, mushukcha uni yulduzlar orasiga ilib qo‘yadi. Albom uchun bir nechta rasmni birga yuboring, birinchi izoh albom nomi bo‘ladi.',
+      { reply_markup: openButton() },
+    ),
   )
 
   const onImage = async (ctx: Context) => {
@@ -85,10 +99,6 @@ export function createBot(token: string, db: Db) {
     if (!message || !ctx.from) return
     const file = imageFile(message)
     if (!file) return
-    if (!adminIds.has(ctx.from.id)) {
-      await ctx.reply('Rasmlarni faqat galereya administratori qo‘sha oladi.')
-      return
-    }
     if (file.fileSize && file.fileSize > MAX_DOWNLOAD_BYTES) {
       await ctx.reply('Rasm 20 MB dan katta. Telegram botlarga bundan katta faylni bermaydi, kichikroq rasm yuboring.')
       return
@@ -99,7 +109,7 @@ export function createBot(token: string, db: Db) {
     }
     try {
       await save(message, file, null)
-      await ctx.reply('Rasm galereyaga qo‘shildi.', { reply_markup: openButton() })
+      await ctx.reply('Rasm galereyangizga qo‘shildi.', { reply_markup: openButton() })
     } catch (error) {
       await ctx.reply(failureText(error))
     }

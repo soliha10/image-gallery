@@ -1,16 +1,23 @@
-import { bigint, index, integer, pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core'
+import { bigint, index, integer, pgTable, primaryKey, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core'
 
-export const albums = pgTable('albums', {
-  id: uuid().primaryKey().defaultRandom(),
-  title: text().notNull(),
-  position: integer().notNull().default(0),
-  createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
-})
+/** Every gallery belongs to one Telegram user; rows from before galleries were personal have no owner yet. */
+export const albums = pgTable(
+  'albums',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    ownerId: bigint({ mode: 'number' }),
+    title: text().notNull(),
+    position: integer().notNull().default(0),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('albums_owner_position').on(t.ownerId, t.position)],
+)
 
 export const photos = pgTable(
   'photos',
   {
     id: uuid().primaryKey().defaultRandom(),
+    ownerId: bigint({ mode: 'number' }),
     albumId: uuid().references(() => albums.id, { onDelete: 'set null' }),
     title: text().notNull().default(''),
     description: text().notNull().default(''),
@@ -19,11 +26,16 @@ export const photos = pgTable(
     height: integer().notNull(),
     blurhash: text().notNull(),
     position: integer().notNull().default(0),
-    telegramFileUniqueId: text().unique(),
+    telegramFileUniqueId: text(),
     createdBy: bigint({ mode: 'number' }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index('photos_album_position').on(t.albumId, t.position)],
+  (t) => [
+    index('photos_album_position').on(t.albumId, t.position),
+    index('photos_owner_position').on(t.ownerId, t.position),
+    // The same Telegram file may sit in several people's galleries, but only once in each.
+    unique('photos_owner_telegram_file').on(t.ownerId, t.telegramFileUniqueId),
+  ],
 )
 
 export const favorites = pgTable(

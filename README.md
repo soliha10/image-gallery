@@ -1,7 +1,12 @@
 # Mushuk Galereyasi
 
 Telegram Mini App: foydalanuvchi skafandrli mushukchani Somon yo'lida suzib yurgan shisha
-observatoriya bo'ylab erkin boshqaradi va rasmlarni yulduzlar orasida tomosha qiladi. Rasmlar bot orqali yoki ilova ichidagi boshqaruv paneli orqali qo'shiladi.
+observatoriya bo'ylab erkin boshqaradi va rasmlarni yulduzlar orasida tomosha qiladi.
+
+Har bir Telegram foydalanuvchisining galereyasi shaxsiy: rasmlar, albomlar, qidiruv va boshqaruv
+faqat egasiga ko'rinadi. Rasm botga yuborilsa yoki ilovada yuklansa, yuborganning galereyasiga
+tushadi. Ulashilgan havola boshqalarga faqat o'sha bitta rasmni ochadi. Bir foydalanuvchiga
+`MAX_PHOTOS_PER_USER` (standart 300) tagacha rasm. Rasmlar bot orqali yoki ilova ichidagi boshqaruv paneli orqali qo'shiladi.
 
 ## Lokal ishga tushirish
 
@@ -13,7 +18,7 @@ pnpm seed      # The Met'dan CC0 rasmlarni yuklaydi (bir necha daqiqa)
 pnpm dev       # http://localhost:5173
 ```
 
-`BOT_TOKEN` bo'sh bo'lsa, brauzerda mock admin foydalanuvchi ishlaydi.
+`BOT_TOKEN` bo'sh bo'lsa, brauzerda dev foydalanuvchi (ID 1) ishlaydi va eski rasmlar unga biriktiriladi.
 
 ## Koinotdagi boshqaruv
 
@@ -36,8 +41,9 @@ pnpm dev       # http://localhost:5173
 ## Bot ulash
 
 1. @BotFather: `/newbot`, tokenni oling.
-2. @userinfobot orqali o'z Telegram ID'ingizni oling.
-3. `cp .env.example .env`, `BOT_TOKEN` va `ADMIN_IDS` ni to'ldiring.
+2. @userinfobot orqali o'z Telegram ID'ingizni oling. Bot ulangach, lokal bazadagi eski rasmlar
+   sizga o'tishi uchun uni `.env` dagi `LEGACY_OWNER_ID` ga yozing.
+3. `cp .env.example .env`, `BOT_TOKEN` ni to'ldiring.
 4. Lokal HTTPS: `cloudflared tunnel --url http://localhost:5173`, olingan manzilni
    `MINI_APP_URL` ga yozing.
 5. @BotFather: `/newapp` bilan Mini App yarating, URL sifatida shu manzilni bering.
@@ -62,10 +68,12 @@ Maxfiy qiymatlar faqat ikki joyda turadi: Render'ning Environment bo'limi va lok
    - Storage: **Object storage > Connect** bo'limida kalit yarating, `S3_ACCESS_KEY_ID` va
      `S3_SECRET_ACCESS_KEY` ni oling.
 2. **Lokal rasmlarni ko'chirish:** `pnpm dev` ni to'xtating, ildizda `.env.production` yarating
-   (git'ga kirmaydi) va `pnpm data:push` ni ishga tushiring. Qayta ishga tushirish xavfsiz, bor
+   (git'ga kirmaydi) va `pnpm data:push` ni ishga tushiring. `OWNER_ID` sizning Telegram ID'ingiz:
+   ko'chirilgan rasmlar sizning galereyangizga tushadi. Qayta ishga tushirish xavfsiz, bor
    yozuvlar o'tkazib yuboriladi.
 
    ```
+   OWNER_ID=<Telegram ID'ingiz>
    DATABASE_URL=postgresql://...neon.tech/neondb?sslmode=require
    S3_ENDPOINT=https://br-noisy-mouse-bafcubif.storage.c-8.eu-central-1.aws.neon.tech
    S3_BUCKET=gallery
@@ -78,7 +86,7 @@ Maxfiy qiymatlar faqat ikki joyda turadi: Render'ning Environment bo'limi va lok
    kiriting. Birinchi deploy'dan keyin `https://<app>.onrender.com` manzilini `PUBLIC_URL` va
    `MINI_APP_URL` ga yozib, qayta deploy qiling.
 4. **Telegram:** @BotFather'da `/newbot` va `/newapp` bilan bot va Mini App yarating. Mini App URL'i
-   Render manzili bo'ladi. `BOT_TOKEN`, `ADMIN_IDS` va `VITE_TG_APP_LINK=https://t.me/<bot>/<app>` ni
+   Render manzili bo'ladi. `BOT_TOKEN` va `VITE_TG_APP_LINK=https://t.me/<bot>/<app>` ni
    Render'ga yozib, qayta deploy qiling. Botga `/start` yuboring.
 
 Render'ning bepul diski vaqtinchalik, shuning uchun production'da tashqi S3 storage majburiy.

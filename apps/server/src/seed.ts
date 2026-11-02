@@ -1,6 +1,8 @@
 import { eq } from 'drizzle-orm'
+import { DEV_USER } from './auth'
 import { closeDb, createDb } from './db'
 import { albums, photos } from './db/schema'
+import { env } from './env'
 import { addPhoto } from './lib/photos'
 
 /** Public-domain (CC0) works from The Met Open Access programme. */
@@ -40,8 +42,10 @@ async function findWorks(section: (typeof CURATED)[number]) {
   return works
 }
 
+/** Samples go to the dev user locally, or to LEGACY_OWNER_ID when that is set. */
+const owner = env.LEGACY_OWNER_ID ?? DEV_USER.id
 const db = await createDb()
-const existing = await db.select({ id: photos.id }).from(photos).limit(1)
+const existing = await db.select({ id: photos.id }).from(photos).where(eq(photos.ownerId, owner)).limit(1)
 if (existing.length > 0) {
   console.log('Gallery already has photos, skipping seed.')
   await closeDb()
@@ -50,13 +54,14 @@ if (existing.length > 0) {
 
 // New photos go to the front, so the cats are imported last to open the gallery.
 for (const [position, section] of [...CURATED.entries()].reverse()) {
-  const [album] = await db.insert(albums).values({ title: section.title, position }).returning()
+  const [album] = await db.insert(albums).values({ ownerId: owner, title: section.title, position }).returning()
   let added = 0
   for (const work of await findWorks(section)) {
     try {
       const response = await fetch(work.primaryImageSmall, { signal: AbortSignal.timeout(30_000) })
       if (!response.ok) continue
       await addPhoto(db, Buffer.from(await response.arrayBuffer()), {
+        ownerId: owner,
         albumId: album!.id,
         title: work.title.slice(0, 120),
         description: work.objectDate,

@@ -10,51 +10,55 @@ import {
 import { and, asc, count, desc, eq, ilike, inArray, or, sql, type SQL } from 'drizzle-orm'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { isAdmin, requireAdmin, requireUser } from '../auth'
+import { requireUser } from '../auth'
 import type { Db } from '../db'
 import { albums, favorites, photos } from '../db/schema'
+import { env } from '../env'
 import { UnsupportedImageError } from '../lib/image'
-import { addPhoto, listAlbums, toPhoto } from '../lib/photos'
+import { addPhoto, listAlbums, ownsAlbum, QuotaExceededError, toPhoto } from '../lib/photos'
 import { storage } from '../lib/storage'
 
 const idParams = z.object({ id: z.uuid() })
 
 const escapeLike = (value: string) => value.replace(/[\\%_]/g, '\\$&')
 
+/**
+ * Every gallery is private to its Telegram user. The one exception is a single photo by id,
+ * which is how a shared link opens for someone else.
+ */
 export async function apiRoutes(app: FastifyInstance, { db }: { db: Db }) {
   app.addHook('preHandler', requireUser)
 
   app.get('/me', async ({ tgUser }): Promise<Me> => {
-    const rows = await db
-      .select({ photoId: favorites.photoId })
-      .from(favorites)
-      .where(eq(favorites.userId, tgUser.id))
+    const [rows, owned] = await Promise.all([
+      db.select({ photoId: favorites.photoId }).from(favorites).where(eq(favorites.userId, tgUser.id)),
+      db.select({ total: count() }).from(photos).where(eq(photos.ownerId, tgUser.id)),
+    ])
     return {
       id: tgUser.id,
       firstName: tgUser.first_name,
       languageCode: tgUser.language_code ?? null,
-      isAdmin: isAdmin(tgUser.id),
       favoriteIds: rows.map((r) => r.photoId),
+      photoCount: owned[0]?.total ?? 0,
+      photoLimit: env.MAX_PHOTOS_PER_USER,
     }
   })
 
-  app.get('/albums', () => listAlbums(db))
+  app.get('/albums', (request) => listAlbums(db, request.tgUser.id))
 
   app.get('/photos', async (request): Promise<PhotoPage> => {
     const query = photoQuerySchema.parse(request.query)
-    const filters: (SQL | undefined)[] = []
+    const owner = request.tgUser.id
+    // Favourites may include photos other people shared; everything else is the viewer's own gallery.
+    const filters: (SQL | undefined)[] = [
+      query.favorites
+        ? inArray(photos.id, db.select({ id: favorites.photoId }).from(favorites).where(eq(favorites.userId, owner)))
+        : eq(photos.ownerId, owner),
+    ]
     if (query.album) filters.push(eq(photos.albumId, query.album))
     if (query.q) {
       const pattern = `%${escapeLike(query.q)}%`
       filters.push(or(ilike(photos.title, pattern), ilike(photos.description, pattern), ilike(photos.credit, pattern)))
-    }
-    if (query.favorites) {
-      filters.push(
-        inArray(
-          photos.id,
-          db.select({ id: favorites.photoId }).from(favorites).where(eq(favorites.userId, request.tgUser.id)),
-        ),
-      )
     }
     const where = and(...filters)
     const [rows, totals] = await Promise.all([
@@ -90,82 +94,99 @@ export async function apiRoutes(app: FastifyInstance, { db }: { db: Db }) {
     return reply.code(204).send()
   })
 
-  await app.register(async (admin) => {
-    admin.addHook('preHandler', requireAdmin)
+  // Managing a gallery: every route below only ever touches the caller's own rows.
+  app.post('/admin/photos', async (request, reply) => {
+    const owner = request.tgUser.id
+    const file = await request.file()
+    if (!file) return reply.code(400).send({ error: 'file_required' })
+    const body = await file.toBuffer()
+    const albumId = z.uuid().safeParse((file.fields.albumId as { value?: unknown } | undefined)?.value)
+    const album = albumId.success && (await ownsAlbum(db, owner, albumId.data)) ? albumId.data : null
+    try {
+      const row = await addPhoto(db, body, { ownerId: owner, albumId: album, createdBy: owner })
+      return reply.code(201).send(toPhoto(row))
+    } catch (error) {
+      if (error instanceof UnsupportedImageError) return reply.code(415).send({ error: 'unsupported_image' })
+      if (error instanceof QuotaExceededError) return reply.code(409).send({ error: 'quota_exceeded' })
+      throw error
+    }
+  })
 
-    admin.post('/admin/photos', async (request, reply) => {
-      const file = await request.file()
-      if (!file) return reply.code(400).send({ error: 'file_required' })
-      const body = await file.toBuffer()
-      const albumId = z.uuid().safeParse((file.fields.albumId as { value?: unknown } | undefined)?.value)
-      try {
-        const row = await addPhoto(db, body, {
-          albumId: albumId.success ? albumId.data : null,
-          createdBy: request.tgUser.id,
-        })
-        return reply.code(201).send(toPhoto(row))
-      } catch (error) {
-        if (error instanceof UnsupportedImageError) return reply.code(415).send({ error: 'unsupported_image' })
-        throw error
+  app.patch('/admin/photos/:id', async (request, reply) => {
+    const owner = request.tgUser.id
+    const { id } = idParams.parse(request.params)
+    const patch = photoPatchSchema.parse(request.body)
+    if (Object.keys(patch).length === 0) return reply.code(400).send({ error: 'empty_patch' })
+    if (patch.albumId && !(await ownsAlbum(db, owner, patch.albumId))) return reply.code(404).send({ error: 'not_found' })
+    const [row] = await db
+      .update(photos)
+      .set(patch)
+      .where(and(eq(photos.id, id), eq(photos.ownerId, owner)))
+      .returning()
+    return row ? toPhoto(row) : reply.code(404).send({ error: 'not_found' })
+  })
+
+  app.delete('/admin/photos/:id', async (request, reply) => {
+    const { id } = idParams.parse(request.params)
+    const [row] = await db
+      .delete(photos)
+      .where(and(eq(photos.id, id), eq(photos.ownerId, request.tgUser.id)))
+      .returning({ id: photos.id })
+    if (!row) return reply.code(404).send({ error: 'not_found' })
+    await storage.removePrefix(`photos/${id}/`)
+    return reply.code(204).send()
+  })
+
+  app.post('/admin/photos/reorder', async (request, reply) => {
+    const { ids } = reorderSchema.parse(request.body)
+    const owner = request.tgUser.id
+    await db.transaction(async (tx) => {
+      for (const [position, id] of ids.entries()) {
+        await tx.update(photos).set({ position }).where(and(eq(photos.id, id), eq(photos.ownerId, owner)))
       }
     })
+    return reply.code(204).send()
+  })
 
-    admin.patch('/admin/photos/:id', async (request, reply) => {
-      const { id } = idParams.parse(request.params)
-      const patch = photoPatchSchema.parse(request.body)
-      if (Object.keys(patch).length === 0) return reply.code(400).send({ error: 'empty_patch' })
-      const [row] = await db.update(photos).set(patch).where(eq(photos.id, id)).returning()
-      return row ? toPhoto(row) : reply.code(404).send({ error: 'not_found' })
-    })
-
-    admin.delete('/admin/photos/:id', async (request, reply) => {
-      const { id } = idParams.parse(request.params)
-      const [row] = await db.delete(photos).where(eq(photos.id, id)).returning({ id: photos.id })
-      if (!row) return reply.code(404).send({ error: 'not_found' })
-      await storage.removePrefix(`photos/${id}/`)
-      return reply.code(204).send()
-    })
-
-    admin.post('/admin/photos/reorder', async (request, reply) => {
-      const { ids } = reorderSchema.parse(request.body)
-      await db.transaction(async (tx) => {
-        for (const [position, id] of ids.entries()) {
-          await tx.update(photos).set({ position }).where(eq(photos.id, id))
-        }
+  app.post('/admin/albums', async (request, reply) => {
+    const owner = request.tgUser.id
+    const { title } = albumInputSchema.parse(request.body)
+    const [row] = await db
+      .insert(albums)
+      .values({
+        ownerId: owner,
+        title,
+        position: sql`(select coalesce(max(${albums.position}), 0) + 1 from ${albums} where ${albums.ownerId} = ${owner})`,
       })
-      return reply.code(204).send()
-    })
+      .returning()
+    return reply.code(201).send(row)
+  })
 
-    admin.post('/admin/albums', async (request, reply) => {
-      const { title } = albumInputSchema.parse(request.body)
-      const [row] = await db
-        .insert(albums)
-        .values({ title, position: sql`(select coalesce(max(position), 0) + 1 from albums)` })
-        .returning()
-      return reply.code(201).send(row)
+  app.post('/admin/albums/reorder', async (request, reply) => {
+    const { ids } = albumReorderSchema.parse(request.body)
+    const owner = request.tgUser.id
+    await db.transaction(async (tx) => {
+      for (const [position, id] of ids.entries()) {
+        await tx.update(albums).set({ position }).where(and(eq(albums.id, id), eq(albums.ownerId, owner)))
+      }
     })
+    return reply.code(204).send()
+  })
 
-    admin.post('/admin/albums/reorder', async (request, reply) => {
-      const { ids } = albumReorderSchema.parse(request.body)
-      await db.transaction(async (tx) => {
-        for (const [position, id] of ids.entries()) {
-          await tx.update(albums).set({ position }).where(eq(albums.id, id))
-        }
-      })
-      return reply.code(204).send()
-    })
+  app.patch('/admin/albums/:id', async (request, reply) => {
+    const { id } = idParams.parse(request.params)
+    const { title } = albumInputSchema.parse(request.body)
+    const [row] = await db
+      .update(albums)
+      .set({ title })
+      .where(and(eq(albums.id, id), eq(albums.ownerId, request.tgUser.id)))
+      .returning()
+    return row ?? reply.code(404).send({ error: 'not_found' })
+  })
 
-    admin.patch('/admin/albums/:id', async (request, reply) => {
-      const { id } = idParams.parse(request.params)
-      const { title } = albumInputSchema.parse(request.body)
-      const [row] = await db.update(albums).set({ title }).where(eq(albums.id, id)).returning()
-      return row ?? reply.code(404).send({ error: 'not_found' })
-    })
-
-    admin.delete('/admin/albums/:id', async (request, reply) => {
-      const { id } = idParams.parse(request.params)
-      await db.delete(albums).where(eq(albums.id, id))
-      return reply.code(204).send()
-    })
+  app.delete('/admin/albums/:id', async (request, reply) => {
+    const { id } = idParams.parse(request.params)
+    await db.delete(albums).where(and(eq(albums.id, id), eq(albums.ownerId, request.tgUser.id)))
+    return reply.code(204).send()
   })
 }

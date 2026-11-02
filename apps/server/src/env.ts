@@ -7,7 +7,9 @@ const schema = z.object({
   BOT_TOKEN: z.string().optional(),
   BOT_WEBHOOK_SECRET: z.string().optional(),
   MINI_APP_URL: z.url().optional(),
-  ADMIN_IDS: z.string().default(''),
+  MAX_PHOTOS_PER_USER: z.coerce.number().int().positive().default(300),
+  /** Owner for photos added before galleries were personal; local development uses the dev user. */
+  LEGACY_OWNER_ID: z.coerce.number().int().positive().optional(),
   DATABASE_URL: z.string().optional(),
   PGLITE_DIR: z.string().default('.data/pglite'),
   STORAGE_DIR: z.string().default('.data/media'),
@@ -34,7 +36,4 @@ if (parsed.NODE_ENV === 'production' && parsed.PUBLIC_URL && !parsed.BOT_WEBHOOK
 }
 
 export const env = parsed
-export const adminIds = new Set(
-  parsed.ADMIN_IDS.split(',').map((id) => Number(id.trim())).filter(Boolean),
-)
 export const devAuthEnabled = parsed.NODE_ENV !== 'production' && !parsed.BOT_TOKEN

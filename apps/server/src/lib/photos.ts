@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { Album, Photo } from '@gallery/shared'
-import { sql } from 'drizzle-orm'
+import { and, count, eq, isNull, sql } from 'drizzle-orm'
 import type { Db } from '../db'
 import { albums, photos } from '../db/schema'
 import { env } from '../env'
@@ -24,7 +24,14 @@ export const toPhoto = (row: PhotoRow): Photo => ({
   createdAt: row.createdAt.toISOString(),
 })
 
+export class QuotaExceededError extends Error {
+  constructor(readonly limit: number) {
+    super(`gallery holds at most ${limit} photos`)
+  }
+}
+
 export interface NewPhoto {
+  ownerId: number
   albumId?: string | null
   title?: string
   description?: string
@@ -35,6 +42,8 @@ export interface NewPhoto {
 
 /** Runs the full pipeline: validate, derive sizes, upload, then record the row last. */
 export async function addPhoto(db: Db, input: Buffer, meta: NewPhoto): Promise<PhotoRow> {
+  const [owned] = await db.select({ total: count() }).from(photos).where(eq(photos.ownerId, meta.ownerId))
+  if ((owned?.total ?? 0) >= env.MAX_PHOTOS_PER_USER) throw new QuotaExceededError(env.MAX_PHOTOS_PER_USER)
   const image = await processImage(input)
   const id = randomUUID()
   await Promise.all(image.files.map((f) => storage.put(`photos/${id}/${f.name}`, f.body, f.contentType)))
@@ -48,7 +57,7 @@ export async function addPhoto(db: Db, input: Buffer, meta: NewPhoto): Promise<P
         width: image.width,
         height: image.height,
         blurhash: image.blurhash,
-        position: sql`(select coalesce(min(${photos.position}), 0) - 1 from ${photos})`,
+        position: sql`(select coalesce(min(${photos.position}), 0) - 1 from ${photos} where ${photos.ownerId} = ${meta.ownerId})`,
       })
       .returning()
     return row!
@@ -58,7 +67,19 @@ export async function addPhoto(db: Db, input: Buffer, meta: NewPhoto): Promise<P
   }
 }
 
-export async function listAlbums(db: Db): Promise<Album[]> {
+/** True when the album exists and belongs to this owner, so photos cannot be filed into someone else's. */
+export async function ownsAlbum(db: Db, ownerId: number, albumId: string) {
+  const [row] = await db.select({ id: albums.id }).from(albums).where(and(eq(albums.id, albumId), eq(albums.ownerId, ownerId)))
+  return !!row
+}
+
+/** Gives galleries made before they were personal to one user. */
+export async function claimUnowned(db: Db, ownerId: number) {
+  await db.update(albums).set({ ownerId }).where(isNull(albums.ownerId))
+  await db.update(photos).set({ ownerId }).where(isNull(photos.ownerId))
+}
+
+export async function listAlbums(db: Db, ownerId: number): Promise<Album[]> {
   const rows = await db
     .select({
       id: albums.id,
@@ -69,6 +90,7 @@ export async function listAlbums(db: Db): Promise<Album[]> {
     })
     .from(albums)
     .leftJoin(photos, sql`${photos.albumId} = ${albums.id}`)
+    .where(eq(albums.ownerId, ownerId))
     .groupBy(albums.id)
     .orderBy(albums.position, albums.createdAt)
   return rows.map(({ coverId, ...album }) => ({

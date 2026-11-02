@@ -119,8 +119,8 @@ export const useStore = create<State>((set, get) => ({
   },
 
   async refresh() {
-    const [albums] = await Promise.all([api.albums(), get().setFilter({ ...get().filter })])
-    set({ albums })
+    const [albums, me] = await Promise.all([api.albums(), api.me(), get().setFilter({ ...get().filter })])
+    set({ albums, me })
   },
 
   setView: (view) => set({ view }),

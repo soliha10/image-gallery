@@ -1,12 +1,16 @@
 import * as Sentry from '@sentry/node'
 import { buildApp } from './app'
 import { createBot } from './bot'
+import { DEV_USER } from './auth'
 import { closeDb, createDb } from './db'
-import { env } from './env'
+import { devAuthEnabled, env } from './env'
+import { claimUnowned } from './lib/photos'
 
 if (env.SENTRY_DSN) Sentry.init({ dsn: env.SENTRY_DSN, environment: env.NODE_ENV })
 
 const db = await createDb()
+const legacyOwner = env.LEGACY_OWNER_ID ?? (devAuthEnabled ? DEV_USER.id : undefined)
+if (legacyOwner) await claimUnowned(db, legacyOwner)
 const bot = env.BOT_TOKEN ? createBot(env.BOT_TOKEN, db) : null
 const app = await buildApp(db, bot)
 

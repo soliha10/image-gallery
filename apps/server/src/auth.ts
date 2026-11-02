@@ -1,5 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import { adminIds, devAuthEnabled, env } from './env'
+import { devAuthEnabled, env } from './env'
 import { validateInitData, type TelegramUser } from './lib/initData'
 
 declare module 'fastify' {
@@ -8,9 +8,7 @@ declare module 'fastify' {
   }
 }
 
-const DEV_USER: TelegramUser = { id: 1, first_name: 'Dev', language_code: 'uz' }
-
-export const isAdmin = (id: number) => adminIds.has(id) || (devAuthEnabled && id === DEV_USER.id)
+export const DEV_USER: TelegramUser = { id: 1, first_name: 'Dev', language_code: 'uz' }
 
 export async function requireUser(request: FastifyRequest, reply: FastifyReply) {
   if (devAuthEnabled) {
@@ -24,8 +22,4 @@ export async function requireUser(request: FastifyRequest, reply: FastifyReply) 
       : null
   if (!user) return reply.code(401).send({ error: 'unauthorized' })
   request.tgUser = user
-}
-
-export async function requireAdmin(request: FastifyRequest, reply: FastifyReply) {
-  if (!isAdmin(request.tgUser.id)) return reply.code(403).send({ error: 'forbidden' })
 }

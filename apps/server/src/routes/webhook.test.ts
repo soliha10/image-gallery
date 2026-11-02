@@ -36,7 +36,7 @@ beforeAll(async () => {
     },
   })
   app = await buildApp(await createDb(), bot)
-})
+}, 60_000)
 
 afterAll(() => app.close())
 

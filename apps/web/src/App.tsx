@@ -100,7 +100,6 @@ function BottomBar() {
   const filter = useStore((s) => s.filter)
   const setFilter = useStore((s) => s.setFilter)
   const setSheet = useStore((s) => s.setSheet)
-  const isAdmin = useStore((s) => s.me?.isAdmin)
   return (
     <div className="pad-bottom absolute inset-x-0 bottom-0 z-10 px-3">
       {view === 'room' && <Caption />}
@@ -116,11 +115,9 @@ function BottomBar() {
         <NavButton label={t.favorites} active={filter.favorites} onClick={() => void setFilter(filter.favorites ? {} : { favorites: true })}>
           <HeartIcon filled={filter.favorites} />
         </NavButton>
-        {isAdmin && (
-          <NavButton label={t.admin} onClick={() => setSheet('admin')}>
-            <GearIcon />
-          </NavButton>
-        )}
+        <NavButton label={t.admin} onClick={() => setSheet('admin')}>
+          <GearIcon />
+        </NavButton>
       </nav>
     </div>
   )
@@ -128,12 +125,22 @@ function BottomBar() {
 
 function Empty() {
   const filter = useStore((s) => s.filter)
+  const setSheet = useStore((s) => s.setSheet)
+  const fresh = !filter.favorites && !filter.q && !filter.album
   const body = filter.favorites ? t.emptyFavorites : filter.q ? t.emptySearch : t.emptyBody
   return (
     <div className="pointer-events-none absolute inset-0 z-[5] flex flex-col items-center justify-center px-10 text-center text-star">
       <CatGlyph className="mb-4 w-24 text-gold" />
-      <h2 className="font-display text-2xl font-semibold">{t.emptyTitle}</h2>
-      <p className="mt-2 text-sm leading-relaxed text-star/70">{body}</p>
+      <h2 className="font-display text-2xl font-semibold">{fresh ? t.welcomeTitle : t.emptyTitle}</h2>
+      <p className="mt-2 text-sm leading-relaxed text-star/75">{body}</p>
+      {fresh && (
+        <button
+          onClick={() => setSheet('admin')}
+          className="pointer-events-auto mt-6 min-h-11 rounded-full bg-gold px-6 text-sm font-bold text-void"
+        >
+          {t.upload}
+        </button>
+      )}
     </div>
   )
 }
