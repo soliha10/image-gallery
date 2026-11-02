@@ -1,0 +1,23 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_PASSWORD: gallery
+      POSTGRES_DB: gallery
+    volumes:
+      - db:/var/lib/postgresql/data
+  app:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://postgres:gallery@db:5432/gallery
+      STORAGE_DIR: /data/media
+    ports:
+      - '3000:3000'
+    volumes:
+      - media:/data/media
+    depends_on:
+      - db
+volumes:
+  db:
+  media:

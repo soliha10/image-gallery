@@ -1,0 +1,124 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-sans: 'Manrope', system-ui, sans-serif;
+  --color-bg: var(--tg-bg);
+  --color-surface: var(--tg-surface);
+  --color-ink: var(--tg-text);
+  --color-hint: var(--tg-hint);
+  --color-accent: var(--tg-accent);
+  --color-on-accent: var(--tg-on-accent);
+  --color-danger: var(--tg-danger);
+  --color-paper: #f6e7cc;
+  --color-amber: #e8a84c;
+  --color-walnut: #1b0f0a;
+}
+
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --tg-bg: #1b0f0a;
+  --tg-surface: #2a1a12;
+  --tg-text: #f6e7cc;
+  --tg-hint: #b69c80;
+  --tg-accent: #e8a84c;
+  --tg-on-accent: #1b0f0a;
+  --tg-danger: #ef7d6b;
+}
+
+:root[data-scheme='light'] {
+  --tg-bg: #fbf4e7;
+  --tg-surface: #f1e5d0;
+  --tg-text: #2a1a12;
+  --tg-hint: #7d6650;
+  --tg-accent: #a8591b;
+  --tg-on-accent: #fff8ec;
+  --tg-danger: #bb3a2a;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: var(--color-walnut);
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  cursor: pointer;
+}
+
+.scroll-area {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.pad-top {
+  padding-top: calc(var(--safe-top) + 12px);
+}
+
+.pad-bottom {
+  padding-bottom: calc(var(--safe-bottom) + 12px);
+}
+
+.room-vignette {
+  background:
+    linear-gradient(to bottom, rgb(21 12 8 / 0.75), transparent 22%),
+    linear-gradient(to top, rgb(21 12 8 / 0.92), transparent 34%);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.rise {
+  animation: rise 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+.sheet {
+  animation: sheet-in 0.3s cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+
+@keyframes loader {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.paw {
+  animation: loader 0.9s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}

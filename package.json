@@ -1,0 +1,22 @@
+{
+  "name": "mushuk-galereyasi",
+  "private": true,
+  "packageManager": "pnpm@12.16.1",
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --parallel --filter './apps/*' run dev",
+    "build": "pnpm --filter web build",
+    "start": "pnpm --filter server start",
+    "seed": "pnpm --filter server seed",
+    "db:generate": "pnpm --filter server db:generate",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "test": "pnpm -r test"
+  },
+  "devDependencies": {
+    "eslint": "^10.14.0",
+    "globals": "^17.13.0",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.72.1"
+  }
+}
