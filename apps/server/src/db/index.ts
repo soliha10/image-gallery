@@ -15,16 +15,24 @@ export type Db = PgDatabase<PgQueryResultHKT, typeof schema>
 
 const migrationsFolder = resolve(dirname(fileURLToPath(import.meta.url)), '../../drizzle')
 
+let release: () => Promise<void> = async () => undefined
+
+/** PGlite flushes its files only on close, so skipping this can leave the database unreadable. */
+export const closeDb = () => release()
+
 /** Uses Postgres when DATABASE_URL is set, otherwise embedded PGlite so dev needs no services. */
 export async function createDb(): Promise<Db> {
   if (env.DATABASE_URL) {
     const pool = new pg.Pool({ connectionString: env.DATABASE_URL, max: 5 })
     const db = drizzlePg(pool, { schema })
+    release = () => pool.end()
     await migratePg(db, { migrationsFolder })
     return db as unknown as Db
   }
   mkdirSync(env.PGLITE_DIR, { recursive: true })
-  const db = drizzlePglite(new PGlite(env.PGLITE_DIR), { schema })
+  const client = new PGlite(env.PGLITE_DIR)
+  const db = drizzlePglite(client, { schema })
+  release = () => client.close()
   await migratePglite(db, { migrationsFolder })
   return db as unknown as Db
 }
