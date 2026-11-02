@@ -1,6 +1,6 @@
 import * as Sentry from '@sentry/node'
 import { buildApp } from './app'
-import { createBot } from './bot'
+import { configureBot, createBot } from './bot'
 import { DEV_USER } from './auth'
 import { closeDb, createDb } from './db'
 import { devAuthEnabled, env } from './env'
@@ -17,6 +17,7 @@ const app = await buildApp(db, bot)
 await app.listen({ port: env.PORT, host: '0.0.0.0' })
 
 if (bot) {
+  await configureBot(bot).catch((error) => app.log.error(error, 'bot commands not set'))
   if (env.PUBLIC_URL) {
     await bot.api
       .setWebhook(`${env.PUBLIC_URL}/telegram/webhook`, {

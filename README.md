@@ -42,6 +42,27 @@ pnpm dev       # http://localhost:5173
 | Uchuvchi yulduz, yulduz izi, rasmlar suzishi | yo'q | bor | bor |
 | Rasm teksturasi | 400 | 800 | 800 |
 
+## Bot
+
+Bot faqat shaxsiy chatda ishlaydi, guruhlarda jim turadi va har kimga o'z Telegram tilida
+(uz, ru, en) javob beradi.
+
+| Buyruq | Vazifasi |
+|---|---|
+| `/start` | Salomlashuv, shaxsiy menyu tugmasi |
+| `/gallery` | Galereyani ochish |
+| `/share` | Galereyaning faqat ko'rish uchun havolasi, "Do'stga yuborish" va "Bekor qilish" tugmalari |
+| `/stats` | Rasmlar soni va limiti, albomlar, havola holati |
+| `/help` | Qisqa qo'llanma |
+
+- **Rasm yuborish:** saqlangan rasm ostida "Ko'rish" (ilovada o'sha rasm), "Yuborish" (inline orqali do'stga),
+  "Albomga" (albom tanlash yoki albomsiz qilish) va "O'chirish" (tasdiq bilan) tugmalari chiqadi.
+- **Bir nechta rasm birga:** albom yaratiladi, "saqlanmoqda" xabari natija bilan almashadi.
+- **Inline rejim:** istalgan chatda `@bot_username so'z` deb yozib, o'z rasmingizni topib yuborasiz.
+  Buning uchun @BotFather'da `/setinline` bilan inline rejimni yoqing.
+- **Barqarorlik:** bir vaqtda ko'pi bilan 2 ta rasm qayta ishlanadi (bepul server xotirasi uchun).
+  Telegram 429 xatosida chaqiruv avtomatik qayta yuboriladi.
+
 ## Bot ulash
 
 1. @BotFather: `/newbot`, tokenni oling.

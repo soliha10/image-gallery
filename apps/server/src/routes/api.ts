@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto'
 import {
   albumInputSchema,
   albumQuerySchema,
@@ -20,8 +19,8 @@ import type { Db } from '../db'
 import { albums, favorites, photos, shares } from '../db/schema'
 import { env } from '../env'
 import { UnsupportedImageError } from '../lib/image'
-import { addPhoto, listAlbums, ownsAlbum, QuotaExceededError, toPhoto } from '../lib/photos'
-import { storage } from '../lib/storage'
+import { addPhoto, deletePhoto, listAlbums, ownsAlbum, QuotaExceededError, toPhoto } from '../lib/photos'
+import { findShare, getOrCreateShare, revokeShare } from '../lib/shares'
 
 const idParams = z.object({ id: z.uuid() })
 
@@ -74,24 +73,15 @@ export async function apiRoutes(app: FastifyInstance, { db }: { db: Db }) {
     return row
   })
 
-  app.get('/share', async (request): Promise<Share> => {
-    const [row] = await db.select({ token: shares.token }).from(shares).where(eq(shares.ownerId, request.tgUser.id))
-    return { token: row?.token ?? null }
-  })
+  app.get('/share', async (request): Promise<Share> => ({ token: await findShare(db, request.tgUser.id) }))
 
   // Creating a link is idempotent, so sharing twice sends the same link; revoking makes a new one next time.
-  app.post('/share', async (request): Promise<Share> => {
-    const { id, first_name } = request.tgUser
-    const [row] = await db
-      .insert(shares)
-      .values({ ownerId: id, token: randomBytes(16).toString('base64url'), ownerName: first_name })
-      .onConflictDoUpdate({ target: shares.ownerId, set: { ownerName: first_name } })
-      .returning({ token: shares.token })
-    return { token: row!.token }
-  })
+  app.post('/share', async (request): Promise<Share> => ({
+    token: await getOrCreateShare(db, request.tgUser.id, request.tgUser.first_name),
+  }))
 
   app.delete('/share', async (request, reply) => {
-    await db.delete(shares).where(eq(shares.ownerId, request.tgUser.id))
+    await revokeShare(db, request.tgUser.id)
     return reply.code(204).send()
   })
 
@@ -179,13 +169,8 @@ export async function apiRoutes(app: FastifyInstance, { db }: { db: Db }) {
 
   app.delete('/admin/photos/:id', async (request, reply) => {
     const { id } = idParams.parse(request.params)
-    const [row] = await db
-      .delete(photos)
-      .where(and(eq(photos.id, id), eq(photos.ownerId, request.tgUser.id)))
-      .returning({ id: photos.id })
-    if (!row) return reply.code(404).send({ error: 'not_found' })
-    await storage.removePrefix(`photos/${id}/`)
-    return reply.code(204).send()
+    const deleted = await deletePhoto(db, request.tgUser.id, id)
+    return reply.code(deleted ? 204 : 404).send()
   })
 
   app.post('/admin/photos/reorder', async (request, reply) => {

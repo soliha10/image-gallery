@@ -7,6 +7,8 @@ const schema = z.object({
   BOT_TOKEN: z.string().optional(),
   BOT_WEBHOOK_SECRET: z.string().optional(),
   MINI_APP_URL: z.url().optional(),
+  /** Direct Mini App link (https://t.me/<bot>/<app>); the same value the web build uses for share links. */
+  VITE_TG_APP_LINK: z.url().optional(),
   MAX_PHOTOS_PER_USER: z.coerce.number().int().positive().default(300),
   /** Owner for photos added before galleries were personal; local development uses the dev user. */
   LEGACY_OWNER_ID: z.coerce.number().int().positive().optional(),

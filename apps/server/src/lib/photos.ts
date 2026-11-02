@@ -73,6 +73,32 @@ export async function ownsAlbum(db: Db, ownerId: number, albumId: string) {
   return !!row
 }
 
+export async function ownedPhoto(db: Db, ownerId: number, photoId: string) {
+  const [row] = await db.select().from(photos).where(and(eq(photos.id, photoId), eq(photos.ownerId, ownerId)))
+  return row ?? null
+}
+
+/** Removes the row first, so a photo is never listed after its files are gone. */
+export async function deletePhoto(db: Db, ownerId: number, photoId: string) {
+  const [row] = await db
+    .delete(photos)
+    .where(and(eq(photos.id, photoId), eq(photos.ownerId, ownerId)))
+    .returning({ id: photos.id })
+  if (row) await storage.removePrefix(`photos/${photoId}/`)
+  return !!row
+}
+
+/** Files a photo into one of the owner's albums, or into none with a null album. */
+export async function setPhotoAlbum(db: Db, ownerId: number, photoId: string, albumId: string | null) {
+  if (albumId && !(await ownsAlbum(db, ownerId, albumId))) return null
+  const [row] = await db
+    .update(photos)
+    .set({ albumId })
+    .where(and(eq(photos.id, photoId), eq(photos.ownerId, ownerId)))
+    .returning()
+  return row ?? null
+}
+
 /** Gives galleries made before they were personal to one user. */
 export async function claimUnowned(db: Db, ownerId: number) {
   await db.update(albums).set({ ownerId }).where(isNull(albums.ownerId))
