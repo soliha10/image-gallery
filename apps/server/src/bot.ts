@@ -77,7 +77,7 @@ export function createBot(token: string, db: Db) {
     env.MINI_APP_URL ? new InlineKeyboard().webApp('Galereyani ochish', env.MINI_APP_URL) : undefined
 
   bot.command('start', (ctx) =>
-    ctx.reply('Xush kelibsiz! Mushukcha sizni kutubxona-galereyada kutyapti.', { reply_markup: openButton() }),
+    ctx.reply('Xush kelibsiz! Mushukcha sizni yulduzlar orasidagi galereyada kutyapti.', { reply_markup: openButton() }),
   )
 
   const onImage = async (ctx: Context) => {

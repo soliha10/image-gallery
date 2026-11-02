@@ -25,6 +25,7 @@ function s3(bucket: string): Storage {
   const client = new S3Client({
     region: env.S3_REGION,
     endpoint: env.S3_ENDPOINT,
+    forcePathStyle: true,
     credentials: { accessKeyId: env.S3_ACCESS_KEY_ID ?? '', secretAccessKey: env.S3_SECRET_ACCESS_KEY ?? '' },
   })
   return {

@@ -6,6 +6,7 @@
     "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
     "start": "tsx --env-file-if-exists=../../.env src/index.ts",
     "seed": "tsx --env-file-if-exists=../../.env src/seed.ts",
+    "data:push": "tsx --env-file=../../.env.production src/dataPush.ts",
     "db:generate": "drizzle-kit generate",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

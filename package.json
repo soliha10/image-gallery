@@ -8,6 +8,7 @@
     "build": "pnpm --filter web build",
     "start": "pnpm --filter server start",
     "seed": "pnpm --filter server seed",
+    "data:push": "pnpm --filter server data:push",
     "db:generate": "pnpm --filter server db:generate",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
